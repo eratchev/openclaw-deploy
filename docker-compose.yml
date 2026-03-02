@@ -1,0 +1,76 @@
+version: "3.8"
+
+networks:
+  ingress:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true
+
+volumes:
+  openclaw_data:
+  redis_data:
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - ingress
+    depends_on:
+      - openclaw
+
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    entrypoint: ["sh", "/entrypoint.sh"]
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - openclaw_data:/home/node/.openclaw
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./scripts/guardrail.py:/app/guardrail.py:ro
+    env_file:
+      - .env
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:default
+    mem_limit: 2g
+    cpus: 1.5
+    pids_limit: 256
+    restart: unless-stopped
+    networks:
+      - ingress
+      - internal
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --bind 0.0.0.0
+      --protected-mode yes
+      --save 60 1
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    mem_limit: 256m
+    cpus: 0.5
+
+volumes:
+  caddy_data:
+  caddy_config:
