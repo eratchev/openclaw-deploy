@@ -17,7 +17,7 @@ OpenClaw (Gateway daemon)
    │
    │  openclaw logs --json --follow
    ▼
-guardrail.py (background process, same container)
+/home/node/guardrail.py (background process, same container)
    │
    ├─ session state machine (NEW → ACTIVE → COMPLETED | ABORTED)
    ├─ limit enforcer
@@ -66,12 +66,20 @@ If `/home/node/.openclaw/GUARDRAIL_DISABLE` exists when the guardrail starts, it
 
 **Deactivate:**
 
+Primary method (works even when container is cycling):
+
 ```bash
-docker compose exec openclaw rm /home/node/.openclaw/GUARDRAIL_DISABLE
-docker compose restart openclaw
+# Remove the file from the volume directly (works even when container is cycling):
+docker run --rm -v <project>_openclaw_data:/data busybox rm -f /data/GUARDRAIL_DISABLE
+make restart
 ```
 
-Or remove the file from the `/data` volume on the host and bring the stack back up with `make up`.
+Secondary method (only works if container is in a stable running state):
+
+```bash
+docker compose exec -T openclaw rm /home/node/.openclaw/GUARDRAIL_DISABLE
+make restart
+```
 
 ## Tuning
 

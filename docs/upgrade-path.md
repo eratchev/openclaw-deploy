@@ -22,7 +22,7 @@ This pulls the latest OpenClaw image and restarts the stack. Equivalent to:
 
 ```bash
 docker compose pull openclaw
-docker compose up -d
+docker compose up -d --no-deps openclaw
 ```
 
 **Step 3 — Verify after upgrade:**
@@ -42,11 +42,9 @@ Send a test message to your bot and confirm it responds normally.
 
 ## Rollback
 
-If the upgraded image is broken, roll back to a specific known-good tag:
+If the upgraded image is broken, roll back to a specific known-good tag by editing `docker-compose.yml` to pin the image tag, then run:
 
 ```bash
-docker compose pull openclaw --tag <specific-tag>
-# or edit docker-compose.yml to pin the image tag, then:
 make up
 ```
 

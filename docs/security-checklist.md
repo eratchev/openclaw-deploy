@@ -9,7 +9,7 @@ Run through this before going live.
 - [ ] No cloud IAM credentials on the VPS
 
 ## Network
-- [ ] VPS: only ports 22 and 443 open (`ufw status`)
+- [ ] VPS firewall: ports 22 (SSH), 80 (ACME challenge), and 443 (HTTPS) open — nothing else (`ufw status`)
 - [ ] Redis not reachable from host (`nc -zv localhost 6379` should fail)
 - [ ] Caddy is only service with exposed ports
 
@@ -21,7 +21,7 @@ Run through this before going live.
 
 ## Container Hardening
 - [ ] OpenClaw running as UID 1000 (`docker compose exec openclaw id`)
-- [ ] Capabilities dropped (`docker inspect <openclaw-container> | grep CapDrop`)
+- [ ] Capabilities dropped: `docker compose exec openclaw cat /proc/1/status | grep -i cap`
 - [ ] Resource limits in effect — MEM LIMIT shows 2GiB, not 0B (`docker stats --no-stream`)
 - [ ] `/data` owned by 1000:1000 (`docker compose exec openclaw ls -la /home/node/`)
 

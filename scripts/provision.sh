@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # OpenClaw VPS provisioning script
 # Run once as root on a fresh Ubuntu LTS VPS.
-# Idempotent — safe to run multiple times.
+# WARNING: UFW rules are reset on each run — do not re-run on a live system with custom rules.
 set -euo pipefail
 
 echo "[provision] Starting VPS hardening..."
@@ -20,6 +20,13 @@ APT::Periodic::Unattended-Upgrade "1";
 EOF
 systemctl enable --now unattended-upgrades
 
+# ── SSH key guard ─────────────────────────────────────────────────────────────
+if ! find /root/.ssh /home -name authorized_keys -size +0c 2>/dev/null | grep -q .; then
+  echo "[provision] ERROR: No authorized_keys found. Add your SSH public key before running."
+  echo "[provision] Example: ssh-copy-id user@<this-vps>"
+  exit 1
+fi
+
 # ── SSH hardening ─────────────────────────────────────────────────────────────
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
@@ -32,6 +39,7 @@ ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp comment "SSH"
 ufw allow 443/tcp comment "HTTPS (Caddy)"
+ufw allow 80/tcp comment "HTTP (ACME/Let's Encrypt challenge)"
 ufw --force enable
 echo "[provision] UFW inbound rules applied."
 

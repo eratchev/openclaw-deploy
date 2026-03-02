@@ -29,6 +29,7 @@ Out of the box you get:
 - A domain name pointing to the VPS
 - OpenClaw already set up locally (you need to onboard channels before deploying)
 - Docker + Docker Compose (installed by provision.sh)
+- **SSH public key loaded on the VPS** — `scripts/provision.sh` disables password authentication. Run `ssh-copy-id user@<your-vps>` before provisioning or you will be locked out.
 
 ## Quickstart
 
@@ -36,7 +37,11 @@ Out of the box you get:
 2. Run `sudo bash scripts/provision.sh`
 3. Copy `.env.example` to `.env` and fill in your values
 4. `make up`
-5. Fix /data permissions (see README step 5 — run the chown command from provision.sh output)
+5. Fix `/data` permissions (the OpenClaw container runs as UID 1000):
+   ```bash
+   docker run --rm -v $(PROJECT_NAME)_openclaw_data:/data busybox chown -R 1000:1000 /data
+   ```
+   Replace `$(PROJECT_NAME)` with your repo directory name (e.g. `openclaw-deploy`).
 6. Run through `docs/security-checklist.md`
 
 ## Security Model
