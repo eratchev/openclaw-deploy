@@ -5,8 +5,9 @@ echo "[entrypoint] Starting guardrail supervisor..."
 
 # Supervised restart loop — guardrail must never silently disappear
 while true; do
-  python3 /app/guardrail.py
-  echo "[entrypoint] guardrail exited (code $?), restarting in 5s..."
+  python3 /home/node/guardrail.py || true
+  code=$?
+  echo "[entrypoint] guardrail exited (code $code), restarting in 5s..."
   sleep 5
 done &
 

@@ -1,5 +1,3 @@
-version: "3.8"
-
 networks:
   ingress:
     driver: bridge
@@ -33,7 +31,7 @@ services:
     volumes:
       - openclaw_data:/home/node/.openclaw
       - ./entrypoint.sh:/entrypoint.sh:ro
-      - ./scripts/guardrail.py:/app/guardrail.py:ro
+      - ./scripts/guardrail.py:/home/node/guardrail.py:ro
     env_file:
       - .env
     cap_drop:
@@ -53,12 +51,17 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD}
-      --bind 0.0.0.0
-      --protected-mode yes
-      --save 60 1
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --bind
+      - "0.0.0.0"
+      - --protected-mode
+      - "yes"
+      - --save
+      - "60"
+      - "1"
     restart: unless-stopped
     volumes:
       - redis_data:/data
@@ -66,6 +69,7 @@ services:
       - internal
     mem_limit: 256m
     cpus: 0.5
+    pids_limit: 32
 
 volumes:
   openclaw_data:
