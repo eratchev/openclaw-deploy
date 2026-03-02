@@ -7,10 +7,6 @@ networks:
     driver: bridge
     internal: true
 
-volumes:
-  openclaw_data:
-  redis_data:
-
 services:
   caddy:
     image: caddy:2-alpine
@@ -72,5 +68,7 @@ services:
     cpus: 0.5
 
 volumes:
+  openclaw_data:
+  redis_data:
   caddy_data:
   caddy_config:
