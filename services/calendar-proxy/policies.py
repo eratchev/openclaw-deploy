@@ -1,7 +1,10 @@
+import hashlib
+import json
 import os
 from datetime import datetime, timezone, timedelta
-from typing import Callable
+from typing import Callable, Optional
 import pytz
+import redis as redis_lib
 from dateutil.rrule import rrulestr
 
 from models import CreateEventInput, ImpactModel, ConflictEntry
@@ -137,3 +140,59 @@ def enforce(
         return "needs_confirmation", None
 
     return "safe_to_execute", None
+
+
+def check_rate_limit(
+    r: redis_lib.Redis,
+    *,
+    calendar_id: str,
+    op: str,
+    date_str: str,
+) -> tuple[bool, Optional[str]]:
+    """Returns (allowed, reason). Increments counter if allowed."""
+    if op == "update":
+        limit = int(os.getenv("GCAL_MAX_UPDATES_PER_DAY", "50"))
+        key = f"rate_limit_updates:{calendar_id}:{date_str}"
+    else:
+        limit = int(os.getenv("GCAL_MAX_EVENTS_PER_DAY", "10"))
+        key = f"rate_limit:{calendar_id}:{date_str}"
+
+    current = int(r.get(key) or 0)
+    if current >= limit:
+        return False, f"rate limit reached: {current}/{limit} {op}s on {calendar_id} for {date_str}"
+
+    pipe = r.pipeline()
+    pipe.incr(key)
+    pipe.expire(key, 48 * 3600)  # 48h TTL — no DST math needed
+    pipe.execute()
+    return True, None
+
+
+def idempotency_key_for(op: str, payload: dict) -> str:
+    """Compute SHA256 idempotency key for a given operation."""
+    if op == "create":
+        data = {k: payload[k] for k in ("title", "start", "end", "calendar_id") if k in payload}
+    elif op == "update":
+        data = {"event_id": payload["event_id"], "changes": payload.get("changes", {})}
+    else:  # delete
+        data = {"event_id": payload["event_id"]}
+    normalized = json.dumps(data, sort_keys=True)
+    digest = hashlib.sha256(normalized.encode()).hexdigest()
+    return f"sha256:{digest}"
+
+
+def check_idempotency(r: redis_lib.Redis, key: str) -> Optional[str]:
+    """Returns event_id if duplicate detected, None otherwise."""
+    val = r.get(f"idem:{key}")
+    return val.decode() if val else None
+
+
+def record_idempotency(
+    r: redis_lib.Redis,
+    key: str,
+    *,
+    event_id: str,
+    ttl_seconds: int = 600,  # 10 minutes
+) -> None:
+    """Record a successful execute for idempotency dedup."""
+    r.setex(f"idem:{key}", ttl_seconds, event_id)
