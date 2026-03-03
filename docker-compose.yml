@@ -16,6 +16,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    env_file:
+      - .env
     networks:
       - ingress
     depends_on:
