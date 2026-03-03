@@ -17,7 +17,7 @@ chmod +x "$SCRIPT"
 
 # Install into root crontab (idempotent — remove existing entry first)
 (
-  { crontab -l 2>/dev/null || true; } | grep -v "$CRON_MARKER"
+  { crontab -l 2>/dev/null || true; } | { grep -v "$CRON_MARKER" || true; }
   echo "# $CRON_MARKER"
   echo "$CRON_ENTRY"
 ) | crontab -
