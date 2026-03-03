@@ -13,6 +13,7 @@ Out of the box you get:
 - Redis session store isolated to an internal Docker network — unreachable from the internet
 - A Python execution guardrail that kills runaway LLM sessions before they burn tokens or abuse tools
 - VPS hardening via `scripts/provision.sh` (UFW, SSH key-only auth, Fail2ban, unattended security upgrades)
+- Automated daily backups of the `/data` volume to Hetzner Object Storage with configurable retention
 - A `Makefile` with commands for bring-up, teardown, logs, backup, and upgrade
 
 ## What This Is NOT
@@ -83,9 +84,23 @@ A Python watchdog runs inside the container and kills OpenClaw if sessions excee
 
 See [docs/execution-guardrails.md](docs/execution-guardrails.md) for limits and tuning.
 
+## Backups
+
+The `/data` volume (OpenClaw config, credentials, session history) is backed up daily to Hetzner Object Storage. Backups older than `BACKUP_RETAIN_DAYS` (default: 7) are pruned automatically.
+
+**Setup (one-time):**
+
+1. Create a bucket in [Hetzner Object Storage](https://console.hetzner.com) and generate S3 credentials
+2. Add the `BACKUP_S3_*` vars to `.env` (see `.env.example`)
+3. Install the cron job: `sudo bash scripts/install-backup-cron.sh`
+
+**Manual backup:** `make backup-remote`
+
+Backups run daily at 03:00 UTC. Logs go to `/var/log/openclaw-backup.log`.
+
 ## Upgrading
 
-`make backup && make update`
+`make backup-remote && make update`
 
 See [docs/upgrade-path.md](docs/upgrade-path.md).
 

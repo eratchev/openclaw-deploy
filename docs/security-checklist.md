@@ -35,6 +35,12 @@ Run through this before going live.
 - [ ] Logs flowing (`make logs` shows activity)
 - [ ] Kill switch tested (`make kill-switch` triggers restart)
 
+## Backups
+- [ ] `BACKUP_S3_*` vars set in `.env`
+- [ ] Cron job installed (`sudo crontab -l | grep openclaw-backup`)
+- [ ] Test backup succeeded (`make backup-remote` runs without error)
+- [ ] Backup visible in Hetzner Object Storage console
+
 ## Skills
 - [ ] No third-party skills installed without review
 - [ ] Dynamic remote skill installs disabled (default)

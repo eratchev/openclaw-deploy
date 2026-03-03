@@ -7,10 +7,16 @@ Always back up before upgrading.
 **Step 1 — Back up `/data`:**
 
 ```bash
-make backup
+make backup-remote
 ```
 
-This creates a timestamped archive of the `/data` volume before any changes. Keep the backup until you have verified the upgraded stack is working correctly.
+This uploads a timestamped archive of the `/data` volume to Hetzner Object Storage. Keep the backup until you have verified the upgraded stack is working correctly.
+
+If S3 backups are not configured, fall back to a local backup:
+
+```bash
+make backup
+```
 
 **Step 2 — Pull and restart:**
 
