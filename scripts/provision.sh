@@ -71,6 +71,6 @@ fi
 # Ensure openclaw_data volume is owned by UID 1000 (node user).
 # Run this after `docker compose up` has created the volume.
 echo "[provision] To fix /data permissions after first compose up, run:"
-echo "  docker run --rm -v openclaw-deploy_openclaw_data:/home/node/.openclaw busybox chown -R 1000:1000 /home/node/.openclaw"
+echo "  (cd /path/to/openclaw-deploy && docker run --rm -v \$(basename \$(pwd))_openclaw_data:/data busybox chown -R 1000:1000 /data)"
 
 echo "[provision] Done. Reboot recommended before starting services."

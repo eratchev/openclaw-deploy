@@ -39,9 +39,9 @@ Out of the box you get:
 4. `make up`
 5. Fix `/data` permissions (the OpenClaw container runs as UID 1000):
    ```bash
-   docker run --rm -v $(PROJECT_NAME)_openclaw_data:/data busybox chown -R 1000:1000 /data
+   docker run --rm -v "$(basename $(pwd))_openclaw_data":/data busybox chown -R 1000:1000 /data
    ```
-   Replace `$(PROJECT_NAME)` with your repo directory name (e.g. `openclaw-deploy`).
+   Run this from inside the repo directory. The volume name is `<repo-dir-name>_openclaw_data`.
 6. Run through `docs/security-checklist.md`
 
 ## Security Model

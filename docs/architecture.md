@@ -32,7 +32,7 @@ Internet
 │  │  /data volume (writable only)    │   │
 │  └──────────────────────────────────┘   │
 │                                         │
-│  UFW: 22 (SSH) + 443 only               │
+│  UFW: 22 (SSH) + 80 (ACME) + 443 only  │
 │  Fail2ban, unattended-upgrades          │
 └─────────────────────────────────────────┘
 ```
