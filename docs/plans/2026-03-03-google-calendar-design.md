@@ -36,8 +36,8 @@ calendar-proxy (container)
 
 ```
 services/calendar-proxy/
-  server.py          # MCP server, tool handlers, SSE transport
-  policies.py        # Policy engine: allowlist, rate limits, high-impact detection, hard denials
+  server.py          # MCP server, tool handlers, SSE transport, health endpoint
+  policies.py        # Policy engine: validate → assess → enforce → execute
   models.py          # Pydantic schemas for all tool inputs and responses
   auth.py            # OAuth token load/decrypt/refresh/re-encrypt lifecycle
   audit.py           # Append-only JSONL audit log writer
@@ -66,11 +66,13 @@ Read-only. Returns events in the given window. OpenClaw uses this to check for o
 Returns free slots and conflicts in the window. Simplifies LLM reasoning — OpenClaw does not need to manually parse `list_events` output to find gaps.
 
 ### `create_event(title, start, end, calendar_id?, description?, recurrence?, execution_mode, idempotency_key?)`
+Subject to full policy pipeline. Counts against daily rate limit.
 
 ### `update_event(event_id, changes, calendar_id?, execution_mode)`
+Not counted against the daily create/delete rate limit. Separate high-limit counter (`GCAL_MAX_UPDATES_PER_DAY`, default: 50) to prevent abuse without blocking normal rescheduling.
 
 ### `delete_event(event_id, calendar_id?, execution_mode)`
-Always treated as high-impact.
+Always treated as high-impact. Counts against daily rate limit.
 
 **`execution_mode`**: `"dry_run" | "execute"`
 - `dry_run` — runs full validation and policy engine, returns impact assessment, never calls Google
@@ -78,9 +80,11 @@ Always treated as high-impact.
 
 **`calendar_id`**: Optional on all tools. Defaults to `primary`. Rejected if not in `GCAL_ALLOWED_CALENDARS`.
 
-**`idempotency_key`**: Optional. If omitted, proxy computes `SHA256(normalized_event_payload)`. Checked against Redis with 60-second TTL. Duplicate returns existing event ID without a second create.
+**`idempotency_key`**: Optional on write tools. If omitted, proxy computes `SHA256(normalized_event_payload)`. Checked against Redis with 10-minute TTL. Only applied to successful `execute` writes — dry_run and denied calls are never cached. Duplicate execute returns existing `event_id` without a second create.
 
 **Datetime format**: All `start`/`end` values must be ISO 8601 with explicit timezone offset (e.g. `2026-03-15T14:00:00+02:00`). Naive datetimes are rejected at the validation layer.
+
+**Recurrence rules**: Must specify either `COUNT` or `UNTIL` — infinite RRULEs are rejected. Minimum frequency: daily (`FREQ=DAILY`). Hourly and more frequent recurrence is rejected. Maximum recurrence count: `GCAL_MAX_RECURRENCE_COUNT` (default: 52).
 
 ---
 
@@ -90,6 +94,7 @@ Every write tool returns a consistent envelope:
 
 ```json
 {
+  "request_id": "uuid4",
   "status": "safe_to_execute | needs_confirmation | denied",
   "impact": {
     "overlaps_existing": true,
@@ -115,70 +120,86 @@ Every write tool returns a consistent envelope:
 
 ## 5. Policy Engine (`policies.py`)
 
-Enforcement sequence for every write operation:
+Four explicit phases run in order for every write operation:
 
-```
-Input
-  → Pydantic validation
-  → Allowlist check
-  → Rate limit check
-  → Duration + temporal validation
-  → High-impact detection
-  → Hard denial check
-  → Idempotency check
-  → Conflict check
-  → Google API call  (execute mode only)
-  → Audit log
-```
-
-### Validation layer (Pydantic — rejects before policy runs)
+### Phase 1: `validate(input)`
+Pydantic layer — rejects malformed input before any policy logic runs:
 - Datetime must have explicit timezone offset — no naive datetimes
 - `start` must be before `end`
 - Duration must be > 0
 - Duration must be ≤ `GCAL_MAX_EVENT_HOURS`
 - `start` must not be more than `GCAL_MAX_PAST_HOURS` in the past
+- Recurrence: must have `COUNT` or `UNTIL`, no `FREQ=HOURLY` or more frequent, count ≤ `GCAL_MAX_RECURRENCE_COUNT`
 
-### Allowlist
-- `GCAL_ALLOWED_CALENDARS` — comma-separated calendar IDs
-- Fails closed: if env var is unset, only `primary` is allowed
-- "All calendars" is never implicitly allowed
-- Calendar ID format validated
+### Phase 2: `assess(input)` → `ImpactModel`
+Produces a complete impact assessment without making any decisions:
+- Check `calendar_id` against allowlist
+- Check business hours and weekend (evaluated in `GCAL_USER_TIMEZONE`)
+- Check duration threshold
+- Check work calendar flag
+- Check recurrence presence
+- Run conflict check (calls `list_events` for the proposed window, returns overlapping events with `overlap_minutes` and `partial | full` severity)
 
-### Rate limit
-- Redis `INCR` with TTL reset at midnight in `GCAL_USER_TIMEZONE`
-- Limit: `GCAL_MAX_EVENTS_PER_DAY` (default: 10)
-- Atomic — no race conditions, no file corruption
+### Phase 3: `enforce(impact)` → `status`
+Applies policy rules to the impact model and returns one of three outcomes:
 
-### High-impact detection → `needs_confirmation`
-Any of the following triggers `status: needs_confirmation`:
-- Duration > 2 hours
-- Start time before `GCAL_ALLOWED_START_HOUR` (default: 8) in `GCAL_USER_TIMEZONE`
-- Start time after `GCAL_ALLOWED_END_HOUR` (default: 20) in `GCAL_USER_TIMEZONE`
-- Day is Saturday or Sunday (evaluated in `GCAL_USER_TIMEZONE`)
-- `calendar_id` matches `GCAL_WORK_CALENDAR_ID`
-- Event has a recurrence rule
-
-### Hard denial → `denied` (not overridable)
-Specific combinations are always rejected regardless of user input:
+**`denied`** — hard rejection, not overridable:
+- `calendar_id` not in allowlist
 - Recurring event on work calendar outside business hours
-- Any event outside allowlist
+- Recurrence rule violates frequency or count limits
 
-### Idempotency
-- Key: `SHA256(normalized_event_payload)` or caller-supplied `idempotency_key`
-- Stored in Redis with 60-second TTL
-- On hit: return existing `event_id`, no second create
+**`needs_confirmation`** — any of:
+- Overlap exists with existing events
+- Duration > 2 hours
+- Outside business hours (`GCAL_ALLOWED_START_HOUR` / `GCAL_ALLOWED_END_HOUR`)
+- Is weekend
+- Is work calendar (`GCAL_WORK_CALENDAR_ID`)
+- Has recurrence rule (all recurring events require confirmation)
+- `delete_event` (always)
 
-### Conflict check
-- Calls `list_events` for the proposed window
-- Returns structured conflict data with `overlap_minutes` and `partial | full` severity
-- Included in `impact` field of response
+**`safe_to_execute`** — none of the above triggered.
+
+### Phase 4: `execute(impact, status, execution_mode)`
+Only runs Google API call when `status == safe_to_execute` AND `execution_mode == execute`:
+- Check rate limit (Redis date-based key: `rate_limit:YYYY-MM-DD`, TTL 48h — no DST/TTL math)
+- Check idempotency (Redis, 10-minute TTL, only for `execute` path — dry_run/denied calls are never cached)
+- Call Google Calendar API
+- Write audit log entry
+
+If `execution_mode == dry_run` or `status != safe_to_execute`: skip Google call, write audit log, return result.
 
 ### Dry-run override
-- If `GCAL_DRY_RUN=true` (env var), all write operations are forced to `dry_run` regardless of `execution_mode` in the tool call — prevents accidental real writes during testing
+If `GCAL_DRY_RUN=true`, all write operations are forced to `execution_mode=dry_run` regardless of tool input. Emits a loud startup warning:
+```
+[WARN] *** DRY_RUN MODE ACTIVE — no calendar writes will be executed ***
+```
 
 ---
 
-## 6. Audit Log (`audit.py`)
+## 6. Denial Matrix
+
+Explicit table of what is denied vs. confirmation-only:
+
+| Combination | Status |
+|---|---|
+| `calendar_id` not in allowlist | `denied` |
+| Recurring + work calendar + outside business hours | `denied` |
+| Recurrence frequency < daily (hourly etc.) | `denied` |
+| Infinite RRULE (no COUNT or UNTIL) | `denied` |
+| Recurrence count > `GCAL_MAX_RECURRENCE_COUNT` | `denied` |
+| Recurring + work calendar + inside business hours | `needs_confirmation` |
+| Recurring + personal calendar | `needs_confirmation` |
+| Non-recurring + work calendar (any time) | `needs_confirmation` |
+| Non-recurring + outside business hours | `needs_confirmation` |
+| Non-recurring + weekend | `needs_confirmation` |
+| Non-recurring + duration > 2h | `needs_confirmation` |
+| `delete_event` (always) | `needs_confirmation` |
+| Overlap with existing event | `needs_confirmation` |
+| Non-recurring + personal + inside hours + ≤ 2h + no overlap | `safe_to_execute` |
+
+---
+
+## 7. Audit Log (`audit.py`)
 
 Append-only JSONL at `/data/calendar-audit.log`.
 
@@ -187,6 +208,7 @@ Every tool call — including dry runs and denials — produces one log entry:
 ```json
 {
   "time": "2026-03-15T14:00:00Z",
+  "request_id": "uuid4",
   "tool": "create_event",
   "tool_version": "v1",
   "execution_mode": "execute",
@@ -200,15 +222,17 @@ Every tool call — including dry runs and denials — produces one log entry:
 }
 ```
 
-**Never logged:** token contents, encryption key, raw OAuth credentials.
+**Never logged:** token contents, encryption key, raw OAuth credentials, full environment.
 
-Log rotation: when file exceeds `GCAL_AUDIT_MAX_MB` (default: 50MB), current file is renamed to `calendar-audit.log.1` and a new file started.
+**Log rotation:** checked at startup only. If `/data/calendar-audit.log` exceeds `GCAL_AUDIT_MAX_MB` (default: 50MB), it is renamed to `calendar-audit.log.1` before the process starts writing. Startup-only rotation avoids concurrent write issues entirely. Host-level `logrotate` can be used as an alternative.
 
 ---
 
-## 7. OAuth Token Lifecycle (`auth.py`)
+## 8. OAuth Token Lifecycle (`auth.py`)
 
 Token stored encrypted at `/data/gcal_token.enc`. Encryption: Fernet (AES-128-CBC + HMAC-SHA256).
+
+OAuth scope: `https://www.googleapis.com/auth/calendar.events` — minimal scope, no full calendar management access.
 
 **Startup:**
 ```python
@@ -218,6 +242,7 @@ if not os.environ.get("GCAL_TOKEN_ENCRYPTION_KEY"):
 encrypted = Path("/data/gcal_token.enc").read_bytes()
 credentials = decrypt_and_load(encrypted, key=os.environ["GCAL_TOKEN_ENCRYPTION_KEY"])
 # credentials object lives in memory only — never written back decrypted
+# key is never logged or printed
 ```
 
 **On token refresh:**
@@ -234,7 +259,28 @@ File permissions: `600` — readable only by the process user.
 
 ---
 
-## 8. Docker Compose Addition
+## 9. Health Endpoint
+
+`GET /health` (internal network only) returns:
+
+```json
+{
+  "redis": "ok | error",
+  "token": "ok | error",
+  "google_api": "ok | error",
+  "dry_run_mode": false
+}
+```
+
+- `redis`: ping check
+- `token`: decrypt and validate credentials object (non-destructive, no API call)
+- `google_api`: lightweight non-destructive API call (e.g. list calendar metadata)
+
+Prevents silent failure — allows `docker compose` healthcheck and monitoring.
+
+---
+
+## 10. Docker Compose Addition
 
 ```yaml
 calendar-proxy:
@@ -249,16 +295,23 @@ calendar-proxy:
   environment:
     - GCAL_ALLOWED_CALENDARS=${GCAL_ALLOWED_CALENDARS:-primary}
     - GCAL_MAX_EVENTS_PER_DAY=${GCAL_MAX_EVENTS_PER_DAY:-10}
+    - GCAL_MAX_UPDATES_PER_DAY=${GCAL_MAX_UPDATES_PER_DAY:-50}
     - GCAL_MAX_EVENT_HOURS=${GCAL_MAX_EVENT_HOURS:-8}
     - GCAL_MAX_PAST_HOURS=${GCAL_MAX_PAST_HOURS:-1}
     - GCAL_ALLOWED_START_HOUR=${GCAL_ALLOWED_START_HOUR:-8}
     - GCAL_ALLOWED_END_HOUR=${GCAL_ALLOWED_END_HOUR:-20}
     - GCAL_USER_TIMEZONE=${GCAL_USER_TIMEZONE:-UTC}
     - GCAL_WORK_CALENDAR_ID=${GCAL_WORK_CALENDAR_ID:-}
+    - GCAL_MAX_RECURRENCE_COUNT=${GCAL_MAX_RECURRENCE_COUNT:-52}
     - GCAL_AUDIT_MAX_MB=${GCAL_AUDIT_MAX_MB:-50}
     - GCAL_DRY_RUN=${GCAL_DRY_RUN:-false}
     - GCAL_TOKEN_ENCRYPTION_KEY=${GCAL_TOKEN_ENCRYPTION_KEY}
     - REDIS_URL=redis://redis:6379
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
   cap_drop:
     - ALL
   read_only: true
@@ -274,9 +327,10 @@ No `ports:` — not reachable from outside the internal network.
 
 ---
 
-## 9. One-Time Token Setup (local → VPS)
+## 11. One-Time Token Setup (local → VPS)
 
 Run once on your Mac after creating a Google Cloud project and enabling the Calendar API.
+Use OAuth scope `https://www.googleapis.com/auth/calendar.events` when configuring credentials.
 
 ```bash
 # 1. Download OAuth2 credentials from Google Cloud Console → client_secret.json
@@ -320,35 +374,38 @@ GCAL_ALLOWED_CALENDARS=primary,<work calendar ID>
 
 ---
 
-## 10. Environment Variables Reference
+## 12. Environment Variables Reference
 
 | Variable | Default | Description |
 |---|---|---|
 | `GCAL_TOKEN_ENCRYPTION_KEY` | **required** | Fernet key for token.enc — no default, fail fast if missing |
 | `GCAL_ALLOWED_CALENDARS` | `primary` | Comma-separated calendar IDs allowed for write operations |
 | `GCAL_WORK_CALENDAR_ID` | `` | Calendar ID treated as work calendar (triggers high-impact) |
-| `GCAL_MAX_EVENTS_PER_DAY` | `10` | Daily rate limit for create/update/delete |
-| `GCAL_MAX_EVENT_HOURS` | `8` | Maximum event duration — longer events rejected |
+| `GCAL_MAX_EVENTS_PER_DAY` | `10` | Daily rate limit for create + delete |
+| `GCAL_MAX_UPDATES_PER_DAY` | `50` | Daily rate limit for update (separate counter) |
+| `GCAL_MAX_EVENT_HOURS` | `8` | Maximum event duration — longer events rejected at validation |
 | `GCAL_MAX_PAST_HOURS` | `1` | How far in the past an event start time is allowed |
 | `GCAL_ALLOWED_START_HOUR` | `8` | Business hours start (in user timezone) |
 | `GCAL_ALLOWED_END_HOUR` | `20` | Business hours end (in user timezone) |
-| `GCAL_USER_TIMEZONE` | `UTC` | Timezone for all business hours and weekend checks |
-| `GCAL_AUDIT_MAX_MB` | `50` | Audit log rotation threshold |
-| `GCAL_DRY_RUN` | `false` | Force all writes to dry_run mode |
+| `GCAL_USER_TIMEZONE` | `UTC` | Timezone for all business hours, weekend, and rate limit date checks |
+| `GCAL_MAX_RECURRENCE_COUNT` | `52` | Maximum recurrence count in RRULE |
+| `GCAL_AUDIT_MAX_MB` | `50` | Audit log rotation threshold (checked at startup) |
+| `GCAL_DRY_RUN` | `false` | Force all writes to dry_run mode — emits loud startup warning |
 | `REDIS_URL` | `redis://redis:6379` | Redis connection for rate limits and idempotency |
 
 ---
 
-## 11. Threat Model
+## 13. Threat Model
 
 | Scenario | Outcome |
 |---|---|
 | OpenClaw container compromised | Safe — Google credentials never in OpenClaw container |
-| `calendar-proxy` container compromised | Attacker needs both `gcal_token.enc` and `GCAL_TOKEN_ENCRYPTION_KEY` (env var) to get Google access |
+| `calendar-proxy` container compromised | Attacker needs both `gcal_token.enc` and `GCAL_TOKEN_ENCRYPTION_KEY` (env var) to get Google access. Containment relies on container isolation, host security, and SSH hygiene. |
 | Volume (`/data`) exfiltrated | `gcal_token.enc` without the key is useless |
-| LLM prompt injection triggers calendar write | Policy engine enforces limits and confirmation gates regardless of LLM intent |
-| Retry storm / duplicate tool calls | Idempotency layer deduplicates within 60-second window |
-
-**Known gap:** `GCAL_TOKEN_ENCRYPTION_KEY` stored in `.env` means VPS shell access + `docker inspect` reveals the key. Acceptable for single-user personal deployment. Upgrade path: Docker secrets or host-level environment injection not stored in the repo.
+| LLM prompt injection triggers calendar write | Policy engine enforces hard denials and confirmation gates regardless of LLM intent |
+| Prompt injection: "create recurring work event every day at 3am" | Denied — recurring + work calendar + outside business hours = hard denial |
+| Retry storm / duplicate tool calls | Idempotency layer deduplicates within 10-minute window (execute path only) |
+| Environment variable exposure via `docker inspect` | `GCAL_TOKEN_ENCRYPTION_KEY` visible to VPS shell access. Acceptable for single-user personal deployment. Upgrade path: Docker secrets or host-level env injection. |
+| Accidental config dump logging key | Never log full environment; key masked in all log output |
 
 **Future hardening:** Restrict `calendar-proxy` outbound egress to `*.googleapis.com` only via host iptables rules. Not included in v1 — requires host-level config outside Docker Compose.
