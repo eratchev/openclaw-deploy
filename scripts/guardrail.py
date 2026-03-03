@@ -259,6 +259,15 @@ class Guardrail:
 
     def run(self):
         print("[guardrail] Starting", flush=True)
+        print(
+            f"[guardrail] Limits: "
+            f"session={self.max_session_seconds}s "
+            f"llm={self.max_llm_calls} "
+            f"idle={self.max_idle_seconds}s "
+            f"memory={self.max_memory_pct}% "
+            f"tool_calls={self.max_tool_calls} (not enforced — tool events not observed)",
+            flush=True,
+        )
         self.openclaw_pid = self.find_openclaw_pid()
 
         try:
