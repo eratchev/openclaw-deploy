@@ -1,6 +1,8 @@
 # openclaw-deploy
 
 > Hardened single-VPS deployment of [OpenClaw](https://github.com/openclaw/openclaw) with execution guardrails. Personal assistant + publishable open-source template.
+>
+> **Repo:** https://github.com/eratchev/openclaw-deploy
 
 ## What This Is
 
