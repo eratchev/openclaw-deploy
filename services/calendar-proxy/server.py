@@ -238,5 +238,62 @@ def delete_event(event_id: str, execution_mode: str, calendar_id: str = "primary
     return {"request_id": str(uuid.uuid4()), "status": "safe_to_execute", "event_id": event_id}
 
 
+# ── REST API (for gcal CLI) ───────────────────────────────────────────────────
+
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+_TOOL_HANDLERS = {
+    "create_event": handle_create_event,
+    "list_events": handle_list_events,
+}
+
+
+def _handle_check_availability(args: dict) -> dict:
+    inp = CheckAvailabilityInput(**args)
+    service = build_google_service()
+    existing = _list_events_fn(service)("primary", inp.time_min, inp.time_max)
+    return {"events": existing, "duration_requested_minutes": inp.duration_minutes}
+
+
+def _handle_delete_event(args: dict) -> dict:
+    event_input = DeleteEventInput(**args)
+    result = _run_write_pipeline(event_input, op="delete", is_delete=True)
+    if result is not None:
+        return result
+    service = build_google_service()
+    service.events().delete(calendarId=event_input.calendar_id, eventId=event_input.event_id).execute()
+    return {"request_id": str(uuid.uuid4()), "status": "safe_to_execute", "event_id": event_input.event_id}
+
+
+_TOOL_HANDLERS["check_availability"] = _handle_check_availability
+_TOOL_HANDLERS["delete_event"] = _handle_delete_event
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def http_health(request: Request) -> JSONResponse:
+    """Health check endpoint."""
+    return JSONResponse(get_health())
+
+
+@mcp.custom_route("/call", methods=["POST"])
+async def http_call(request: Request) -> JSONResponse:
+    """Call a calendar tool by name. Body: {\"tool\": \"<name>\", \"args\": {...}}"""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    tool = body.get("tool")
+    args = body.get("args", {})
+    handler = _TOOL_HANDLERS.get(tool)
+    if handler is None:
+        return JSONResponse({"error": f"unknown tool: {tool}", "available": list(_TOOL_HANDLERS)}, status_code=404)
+    try:
+        result = handler(args)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 if __name__ == "__main__":
     mcp.run(transport="sse")
