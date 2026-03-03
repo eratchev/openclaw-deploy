@@ -7,8 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN id -u proxy &>/dev/null || useradd -r -u 1001 proxy
-USER proxy
+USER 1000
 
 EXPOSE 8080
 CMD ["python", "server.py"]
