@@ -93,9 +93,12 @@ class Guardrail:
             if result.returncode == 0:
                 pids = result.stdout.strip().split("\n")
                 return int(pids[0])
-        except Exception:
-            pass
-        return None
+        except FileNotFoundError:
+            print("[guardrail] ERROR: pgrep not found — PID detection disabled", flush=True)
+            return None
+        except Exception as e:
+            print(f"[guardrail] WARNING: pgrep failed: {e}", flush=True)
+            return None
 
     # ── Kill switch ───────────────────────────────────────────────────────────
 
@@ -202,7 +205,7 @@ class Guardrail:
             if violation:
                 print(f"[guardrail] VIOLATION session={session_id}: {violation}", flush=True)
                 self.sessions.pop(session_id, None)
-                self.kill_openclaw()
+                self.kill_openclaw()  # blocks event loop for up to 10s (SIGTERM wait)
             return
 
         if subsystem == SUBSYSTEM_AGENT and MSG_LLM_DONE in message:
@@ -250,7 +253,7 @@ class Guardrail:
         pct = (current / limit) * 100
         if pct > self.max_memory_pct:
             print(f"[guardrail] MEMORY THRESHOLD {pct:.1f}% > {self.max_memory_pct}% — terminating", flush=True)
-            self.kill_openclaw()
+            self.kill_openclaw()  # blocks event loop for up to 10s (SIGTERM wait)
 
     # ── Main loop ─────────────────────────────────────────────────────────────
 
@@ -258,12 +261,16 @@ class Guardrail:
         print("[guardrail] Starting", flush=True)
         self.openclaw_pid = self.find_openclaw_pid()
 
-        proc = subprocess.Popen(
-            ["openclaw", "logs", "--follow", "--json"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
+        try:
+            proc = subprocess.Popen(
+                ["openclaw", "logs", "--follow", "--json"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except FileNotFoundError:
+            print("[guardrail] ERROR: 'openclaw' not found on PATH — cannot start log monitor", flush=True)
+            raise
 
         last_watchdog = time.time()
 
