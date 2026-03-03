@@ -38,8 +38,8 @@ ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp comment "SSH"
-ufw allow 443/tcp comment "HTTPS (Caddy)"
-ufw allow 80/tcp comment "HTTP (ACME/Let's Encrypt challenge)"
+ufw allow 443/tcp comment "HTTPS Caddy"
+ufw allow 80/tcp comment "HTTP ACME challenge"
 ufw --force enable
 echo "[provision] UFW inbound rules applied."
 
