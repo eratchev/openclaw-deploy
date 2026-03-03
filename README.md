@@ -100,6 +100,50 @@ The `/data` volume (OpenClaw config, credentials, session history) is backed up 
 
 Backups run daily at 03:00 UTC. Logs go to `/var/log/openclaw-backup.log`.
 
+## Google Calendar Integration
+
+OpenClaw can read and write your Google Calendar via an MCP proxy that runs on the internal Docker network. All writes go through a policy engine (conflict detection, business hours, rate limits) before touching the Google API.
+
+**One-time setup (local machine):**
+
+```bash
+# 1. Generate an encryption key and save it
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# → Add GCAL_TOKEN_ENCRYPTION_KEY=<key> to .env (local and VPS)
+
+# 2. Authenticate with Google (requires client_secret.json from Google Cloud Console)
+python3 services/calendar-proxy/scripts/auth_setup.py \
+  --client-secret client_secret.json --out token.json
+
+# 3. Encrypt the token and copy it to the VPS
+python3 services/calendar-proxy/scripts/encrypt_token.py \
+  --token token.json --key <KEY> --out token.enc
+scp token.enc user@<your-vps>:/tmp/
+
+ssh user@<your-vps> "
+  docker run --rm \
+    -v openclaw-deploy_openclaw_data:/data \
+    -v /tmp:/src \
+    busybox sh -c 'cp /src/token.enc /data/gcal_token.enc && chmod 600 /data/gcal_token.enc'
+"
+
+# 4. Clean up plaintext files
+rm client_secret.json token.json token.enc
+```
+
+**VPS `.env` additions required:**
+
+```bash
+GCAL_TOKEN_ENCRYPTION_KEY=<key>
+GCAL_USER_TIMEZONE=Europe/Helsinki   # your local timezone
+GCAL_ALLOWED_CALENDARS=primary       # comma-separated calendar IDs
+GCAL_WORK_CALENDAR_ID=               # optional — requires confirmation for any write
+```
+
+Then `make up` (or `docker compose up -d`) to start the `calendar-proxy` container.
+
+See [docs/calendar-proxy.md](docs/calendar-proxy.md) for tuning, health checks, and troubleshooting.
+
 ## Upgrading
 
 `make backup-remote && make update`
