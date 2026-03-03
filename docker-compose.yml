@@ -38,7 +38,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-      - seccomp:default
     mem_limit: 2g
     cpus: 1.5
     pids_limit: 256
