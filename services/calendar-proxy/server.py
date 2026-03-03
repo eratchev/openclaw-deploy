@@ -75,7 +75,7 @@ def _run_write_pipeline(event_input, op: str, is_delete: bool = False):
     request_id = str(uuid.uuid4())
     start_ms = time.monotonic()
     execution_mode = event_input.execution_mode
-    if DRY_RUN:
+    if os.getenv("GCAL_DRY_RUN", "false").lower() == "true":
         execution_mode = "dry_run"
 
     calendar_id = event_input.calendar_id
