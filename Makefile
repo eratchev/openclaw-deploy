@@ -1,7 +1,7 @@
 PROJECT := $(notdir $(CURDIR))
 DATA_VOLUME := $(PROJECT)_openclaw_data
 
-.PHONY: up down logs logs-all restart status backup update test kill-switch
+.PHONY: up down logs logs-all restart status backup backup-remote update test kill-switch
 
 # Start all services
 up:
@@ -35,6 +35,10 @@ backup:
 		-v $(PWD)/backups:/backup \
 		busybox tar czf /backup/openclaw-data-$(shell date +%Y%m%d-%H%M%S).tar.gz -C /source .
 	@echo "Backup saved to ./backups/"
+
+# Backup /data volume to Hetzner Object Storage (requires BACKUP_S3_* in .env)
+backup-remote:
+	sudo bash scripts/backup-cron.sh
 
 # Pull latest image and restart
 update:
