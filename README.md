@@ -36,13 +36,40 @@ Out of the box you get:
 1. Clone this repo on your VPS
 2. Run `sudo bash scripts/provision.sh`
 3. Copy `.env.example` to `.env` and fill in your values
-4. `make up`
-5. Fix `/data` permissions (the OpenClaw container runs as UID 1000):
+4. Copy your local OpenClaw config to the VPS data volume:
+   ```bash
+   # On your local machine
+   rsync -av ~/.openclaw/ user@<your-vps>:/tmp/openclaw-config/
+
+   # Then on the VPS (from inside the repo directory)
+   docker run --rm \
+     -v /tmp/openclaw-config:/src \
+     -v "$(basename $(pwd))_openclaw_data":/dest \
+     busybox sh -c 'cp -r /src/. /dest/ && chown -R 1000:1000 /dest'
+   ```
+5. `make up`
+6. Fix `/data` permissions (the OpenClaw container runs as UID 1000):
    ```bash
    docker run --rm -v "$(basename $(pwd))_openclaw_data":/data busybox chown -R 1000:1000 /data
    ```
    Run this from inside the repo directory. The volume name is `<repo-dir-name>_openclaw_data`.
-6. Run through `docs/security-checklist.md`
+7. Fix the device platform pin — OpenClaw config created on macOS has a `darwin` platform binding that the Linux container rejects. Run this once after first deploy:
+   ```bash
+   docker compose exec openclaw node -e "
+   const fs = require('fs');
+   const p = '/home/node/.openclaw/devices/paired.json';
+   const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+   for (const id of Object.keys(d)) {
+     if (d[id].clientId === 'cli') d[id].platform = 'linux';
+   }
+   fs.writeFileSync(p, JSON.stringify(d, null, 2));
+   fs.writeFileSync('/home/node/.openclaw/devices/pending.json', '{}');
+   console.log('done');
+   "
+   docker compose restart openclaw
+   ```
+   Without this fix the guardrail exits immediately and `openclaw logs` returns `pairing required`.
+8. Run through `docs/security-checklist.md`
 
 ## Security Model
 
@@ -65,3 +92,39 @@ See [docs/upgrade-path.md](docs/upgrade-path.md).
 ## Pre-launch Checklist
 
 See [docs/security-checklist.md](docs/security-checklist.md). Run through it before going live.
+
+## Troubleshooting
+
+### Guardrail exits immediately / `pairing required`
+
+**Symptom:** `[entrypoint] guardrail exited (code 0), restarting in 5s...` loops indefinitely. Running `docker compose exec openclaw openclaw logs --json` returns `gateway closed (1008): pairing required`.
+
+**Cause:** OpenClaw config was created on macOS. The gateway pins the CLI device to `darwin` and rejects connections from the Linux container.
+
+**Fix:**
+```bash
+docker compose exec openclaw node -e "
+const fs = require('fs');
+const p = '/home/node/.openclaw/devices/paired.json';
+const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+for (const id of Object.keys(d)) {
+  if (d[id].clientId === 'cli') d[id].platform = 'linux';
+}
+fs.writeFileSync(p, JSON.stringify(d, null, 2));
+fs.writeFileSync('/home/node/.openclaw/devices/pending.json', '{}');
+console.log('done');
+"
+docker compose restart openclaw
+```
+
+### Caddy fails with `unrecognized global option: reverse_proxy`
+
+**Cause:** The `DOMAIN` variable is not visible to Caddy, so `{$DOMAIN}` expands to an empty string and Caddy interprets the site block as the global options block.
+
+**Fix:** Ensure `env_file: - .env` is present under the `caddy` service in `docker-compose.yml` (already included in this repo).
+
+### OpenClaw reports `Missing config`
+
+**Cause:** The `/data` volume is empty — OpenClaw config was not copied from your local machine before starting the stack.
+
+**Fix:** Stop the stack, copy your local `~/.openclaw` into the volume (see Quickstart step 4), then bring the stack back up.
