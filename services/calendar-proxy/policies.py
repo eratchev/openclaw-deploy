@@ -115,7 +115,7 @@ def enforce(
 
     # Hard denials — not overridable
     if not in_allowlist:
-        return "denied", f"calendar_id '{calendar_id}' is not in GCAL_ALLOWED_CALENDARS"
+        return "denied", f"calendar_id '{calendar_id}' is not in the allowlist (GCAL_ALLOWED_CALENDARS)"
 
     if impact.recurring and impact.work_calendar and (impact.outside_business_hours or impact.is_weekend):
         return "denied", "recurring event on work calendar outside business hours is not allowed"
