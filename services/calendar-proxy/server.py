@@ -26,7 +26,7 @@ if DRY_RUN:
 
 token_store = TokenStore.from_env()
 audit = AuditLog(log_path=Path(os.getenv("GCAL_AUDIT_LOG_PATH", "/data/calendar-audit.log")))
-mcp = FastMCP("calendar-proxy")
+mcp = FastMCP("calendar-proxy", host="0.0.0.0", port=8080)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -239,4 +239,4 @@ def delete_event(event_id: str, execution_mode: str, calendar_id: str = "primary
 
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", host="0.0.0.0", port=8080)
+    mcp.run(transport="sse")
