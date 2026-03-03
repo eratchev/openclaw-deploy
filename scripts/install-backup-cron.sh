@@ -16,7 +16,11 @@ fi
 chmod +x "$SCRIPT"
 
 # Install into root crontab (idempotent — remove existing entry first)
-( crontab -l 2>/dev/null | grep -v "$CRON_MARKER" ; echo "# $CRON_MARKER"; echo "$CRON_ENTRY" ) | crontab -
+(
+  { crontab -l 2>/dev/null || true; } | grep -v "$CRON_MARKER"
+  echo "# $CRON_MARKER"
+  echo "$CRON_ENTRY"
+) | crontab -
 
 echo "[install-backup-cron] Cron job installed (runs daily at 03:00 UTC):"
 echo "  $CRON_ENTRY"
