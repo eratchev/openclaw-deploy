@@ -61,10 +61,15 @@ def test_no_violation_under_limits():
 
 def test_llm_call_violation():
     g = Guardrail()
-    session, now = make_session(llm_count=g.max_llm_calls + 1)
+    session, now = make_session(llm_count=g.max_llm_calls)
     result = g.check_limits(session, now)
     assert result is not None
     assert "llm" in result.lower()
+
+def test_llm_call_no_violation_one_under_limit():
+    g = Guardrail()
+    session, now = make_session(llm_count=g.max_llm_calls - 1)
+    assert g.check_limits(session, now) is None
 
 def test_session_time_violation():
     g = Guardrail()
@@ -116,11 +121,9 @@ def test_violation_calls_kill_openclaw():
     g.max_llm_calls = 2
     with patch.object(g, 'kill_openclaw') as mock_kill:
         g.process_event(make_session_register("abc"))
-        g.process_event(make_llm_start("abc"))
+        g.process_event(make_llm_start("abc"))  # count=1, no violation
         g.process_event(make_llm_done("abc"))
-        g.process_event(make_llm_start("abc"))
-        g.process_event(make_llm_done("abc"))
-        g.process_event(make_llm_start("abc"))  # triggers violation (count=3 > max=2)
+        g.process_event(make_llm_start("abc"))  # count=2 >= max=2, triggers violation
         mock_kill.assert_called_once()
 
 def test_non_log_events_ignored():

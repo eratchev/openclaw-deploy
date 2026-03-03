@@ -28,6 +28,7 @@ VOLUME="$(basename "$REPO")_openclaw_data"
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 TMPFILE="/tmp/openclaw-backup-${TIMESTAMP}.tar.gz"
 S3_KEY="openclaw-data-${TIMESTAMP}.tar.gz"
+trap 'rm -f "$TMPFILE"' EXIT
 
 # ── Create backup ─────────────────────────────────────────────────────────────
 echo "[backup] Creating backup of volume ${VOLUME}..."

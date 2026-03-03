@@ -20,6 +20,7 @@ import os
 import sys
 import json
 import re
+import select
 import time
 import signal
 import subprocess
@@ -139,8 +140,8 @@ class Guardrail:
         if elapsed > self.max_session_seconds:
             return f"session time limit ({elapsed:.0f}s > {self.max_session_seconds}s)"
 
-        if session.llm_count > self.max_llm_calls:
-            return f"llm call limit ({session.llm_count} > {self.max_llm_calls})"
+        if session.llm_count >= self.max_llm_calls:
+            return f"llm call limit ({session.llm_count} >= {self.max_llm_calls})"
 
         # Idle check: only if last_event_time is meaningfully in the past relative to now
         idle = now - session.last_event_time
@@ -283,7 +284,7 @@ class Guardrail:
 
         last_watchdog = time.time()
 
-        for line in proc.stdout:
+        while True:
             now = time.time()
 
             self.check_kill_switch()
@@ -293,6 +294,15 @@ class Guardrail:
                 self.check_memory()
                 self.prune_sessions(now)
                 last_watchdog = now
+
+            # Wait up to 5s for a log line so the watchdog runs on idle systems.
+            ready, _, _ = select.select([proc.stdout], [], [], 5.0)
+            if not ready:
+                continue
+
+            line = proc.stdout.readline()
+            if not line:
+                break  # EOF — subprocess exited
 
             line = line.strip()
             if not line:
