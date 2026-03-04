@@ -74,6 +74,7 @@ services:
 
   calendar-proxy:
     build: ./services/calendar-proxy
+    profiles: [calendar]
     restart: unless-stopped
     networks:
       - internal

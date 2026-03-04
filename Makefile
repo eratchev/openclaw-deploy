@@ -1,11 +1,15 @@
 PROJECT := $(notdir $(CURDIR))
 DATA_VOLUME := $(PROJECT)_openclaw_data
 
-.PHONY: up down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals deploy-workspace
+.PHONY: up up-calendar down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals deploy-workspace
 
-# Start all services
+# Start base services (caddy, openclaw, redis)
 up:
 	docker compose up -d
+
+# Start base services + Google Calendar proxy
+up-calendar:
+	docker compose --profile calendar up -d
 
 # Stop all services
 down:

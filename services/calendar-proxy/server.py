@@ -8,6 +8,7 @@ from typing import Any
 import redis as redis_lib
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request as GoogleAuthRequest
 from mcp.server.fastmcp import FastMCP
 
 from auth import TokenStore
@@ -44,6 +45,21 @@ def build_google_service():
         client_secret=token_data.get("client_secret"),
         scopes=token_data.get("scopes"),
     )
+    if not creds.valid:
+        if creds.expired and creds.refresh_token:
+            creds.refresh(GoogleAuthRequest())
+            token_store.save({
+                "token": creds.token,
+                "refresh_token": creds.refresh_token,
+                "token_uri": creds.token_uri,
+                "client_id": creds.client_id,
+                "client_secret": creds.client_secret,
+                "scopes": list(creds.scopes) if creds.scopes else token_data.get("scopes"),
+            })
+        else:
+            raise RuntimeError(
+                "Google credentials are invalid and cannot be refreshed. Re-run auth setup."
+            )
     return build("calendar", "v3", credentials=creds)
 
 
@@ -239,7 +255,12 @@ def delete_event(event_id: str, execution_mode: str, calendar_id: str = "primary
         return result
     service = build_google_service()
     service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
-    return {"request_id": str(uuid.uuid4()), "status": "safe_to_execute", "event_id": event_id}
+    idem_key = idempotency_key or idempotency_key_for("delete", event_input.model_dump())
+    record_idempotency(get_redis(), idem_key, event_id=event_id)
+    request_id = str(uuid.uuid4())
+    audit.write(request_id=request_id, tool="delete_event", execution_mode="execute",
+                session_id="", args=event_input.model_dump(), status="deleted", event_id=event_id, duration_ms=0)
+    return {"request_id": request_id, "status": "safe_to_execute", "event_id": event_id}
 
 
 # ── REST API (for gcal CLI) ───────────────────────────────────────────────────
@@ -267,7 +288,12 @@ def _handle_delete_event(args: dict) -> dict:
         return result
     service = build_google_service()
     service.events().delete(calendarId=event_input.calendar_id, eventId=event_input.event_id).execute()
-    return {"request_id": str(uuid.uuid4()), "status": "safe_to_execute", "event_id": event_input.event_id}
+    idem_key = event_input.idempotency_key or idempotency_key_for("delete", event_input.model_dump())
+    record_idempotency(get_redis(), idem_key, event_id=event_input.event_id)
+    request_id = str(uuid.uuid4())
+    audit.write(request_id=request_id, tool="delete_event", execution_mode="execute",
+                session_id="", args=event_input.model_dump(), status="deleted", event_id=event_input.event_id, duration_ms=0)
+    return {"request_id": request_id, "status": "safe_to_execute", "event_id": event_input.event_id}
 
 
 _TOOL_HANDLERS["check_availability"] = _handle_check_availability

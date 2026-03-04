@@ -6,7 +6,7 @@
 
 ## What This Is
 
-One VPS. One Docker Compose. Telegram + WhatsApp through OpenClaw's Gateway, hardened container, log-driven execution guardrail, Redis session store. TLS via Caddy.
+One VPS. One Docker Compose. Hardened container, log-driven execution guardrail, Redis session store, TLS via Caddy. Telegram, WhatsApp, Google Calendar, and Brave Search are all optional integrations — the base stack runs without any of them.
 
 Out of the box you get:
 
@@ -100,7 +100,7 @@ The `/data` volume (OpenClaw config, credentials, session history) is backed up 
 
 Backups run daily at 03:00 UTC. Logs go to `/var/log/openclaw-backup.log`.
 
-## Google Calendar Integration
+## Google Calendar Integration *(optional)*
 
 OpenClaw can read and write your Google Calendar via an MCP proxy that runs on the internal Docker network. All writes go through a policy engine (conflict detection, business hours, rate limits) before touching the Google API.
 
@@ -140,7 +140,7 @@ GCAL_ALLOWED_CALENDARS=primary       # comma-separated calendar IDs
 GCAL_WORK_CALENDAR_ID=               # optional — requires confirmation for any write
 ```
 
-Then `make up` (or `docker compose up -d`) to start the `calendar-proxy` container.
+Then `make up-calendar` to start the base stack **plus** the calendar-proxy container. (Plain `make up` skips `calendar-proxy` — it only starts when explicitly requested via the `calendar` profile.)
 
 **One-time exec approvals setup** (run after first deploy):
 
@@ -152,7 +152,7 @@ This configures the `gcal` and `date` binaries on the exec allowlist so the agen
 
 See [docs/calendar-proxy.md](docs/calendar-proxy.md) for tuning, health checks, and troubleshooting.
 
-## Brave Search
+## Brave Search *(optional)*
 
 The agent can search the web using the Brave Search API. Get a free API key at [brave.com/search/api](https://brave.com/search/api), then configure it in the running container:
 
@@ -163,7 +163,7 @@ docker compose exec openclaw openclaw config set tools.web.search.maxResults 5
 docker compose restart openclaw
 ```
 
-## Agent Workspace
+## Agent Workspace *(optional)*
 
 The `workspace/` directory contains the agent's instruction files. These are copied into the container at runtime and control agent behaviour:
 
