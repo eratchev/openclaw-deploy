@@ -142,7 +142,42 @@ GCAL_WORK_CALENDAR_ID=               # optional — requires confirmation for an
 
 Then `make up` (or `docker compose up -d`) to start the `calendar-proxy` container.
 
+**One-time exec approvals setup** (run after first deploy):
+
+```bash
+make setup-approvals
+```
+
+This configures the `gcal` and `date` binaries on the exec allowlist so the agent can call them without interactive approval.
+
 See [docs/calendar-proxy.md](docs/calendar-proxy.md) for tuning, health checks, and troubleshooting.
+
+## Brave Search
+
+The agent can search the web using the Brave Search API. Get a free API key at [brave.com/search/api](https://brave.com/search/api), then configure it in the running container:
+
+```bash
+docker compose exec openclaw openclaw config set tools.web.search.apiKey <YOUR_KEY>
+docker compose exec openclaw openclaw config set tools.web.search.provider brave
+docker compose exec openclaw openclaw config set tools.web.search.maxResults 5
+docker compose restart openclaw
+```
+
+## Agent Workspace
+
+The `workspace/` directory contains the agent's instruction files. These are copied into the container at runtime and control agent behaviour:
+
+- `AGENTS.md` — injected into every system prompt (always active, all sessions)
+- `MEMORY.md` — loaded in direct/DM sessions only (personal context, not shared in groups)
+- `COMMANDS.md` — global commands available in all sessions including groups
+
+Edit the files locally, then deploy:
+
+```bash
+make deploy-workspace
+```
+
+> **Telegram groups:** The bot only responds when @mentioned (e.g. `@YourBotName ai update`). This is controlled by `channels.telegram.groupPolicy: open` — change it to `disabled` to block group messages entirely, or configure per-group `requireMention: false` to allow unprefixed commands.
 
 ## Upgrading
 
