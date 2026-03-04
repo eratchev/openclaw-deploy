@@ -88,6 +88,25 @@ def test_needs_confirmation_delete_always():
     assert status == "needs_confirmation"
 
 
+def test_confirmed_bypasses_delete_confirmation():
+    impact = _impact()
+    status, reason = enforce(impact, calendar_id="primary", in_allowlist=True, is_delete=True, confirmed=True)
+    assert status == "safe_to_execute"
+    assert reason is None
+
+
+def test_confirmed_bypasses_other_confirmation_flags():
+    impact = _impact(overlaps_existing=True)
+    status, reason = enforce(impact, calendar_id="primary", in_allowlist=True, confirmed=True)
+    assert status == "safe_to_execute"
+
+
+def test_confirmed_does_not_bypass_hard_denial():
+    impact = _impact(recurring=True, work_calendar=True, outside_business_hours=True)
+    status, reason = enforce(impact, calendar_id="primary", in_allowlist=True, confirmed=True)
+    assert status == "denied"
+
+
 # ── Safe to execute ───────────────────────────────────────────────────────────
 
 def test_safe_to_execute_simple_event():

@@ -5,7 +5,7 @@ Usage:
   gcal create  --title TITLE --start ISO --end ISO --mode (execute|dry_run|needs_confirmation)
                [--calendar-id ID] [--description TEXT] [--rrule RULE] [--idem-key KEY]
   gcal list    --from ISO --to ISO [--calendar-id ID]
-  gcal delete  --event-id ID --mode (execute|dry_run|needs_confirmation) [--calendar-id ID]
+  gcal delete  --event-id ID --mode (execute|dry_run) [--confirmed] [--calendar-id ID]
   gcal avail   --from ISO --to ISO --minutes N
   gcal health
 """
@@ -105,6 +105,7 @@ def main():
             "event_id": event_id,
             "execution_mode": mode,
             "calendar_id": _parse_flag(rest, "--calendar-id", "primary"),
+            "confirmed": "--confirmed" in rest,
         })
     elif cmd == "avail":
         time_from = _parse_flag(rest, "--from")

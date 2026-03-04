@@ -91,6 +91,7 @@ def _run_write_pipeline(event_input, op: str, is_delete: bool = False):
         impact = None
 
     # Enforce
+    confirmed = getattr(event_input, "confirmed", False)
     status, reason = enforce(
         impact or type("I", (), {"overlaps_existing": False, "overlapping_events": [],
                                   "outside_business_hours": False, "is_weekend": False,
@@ -99,6 +100,7 @@ def _run_write_pipeline(event_input, op: str, is_delete: bool = False):
         calendar_id=calendar_id,
         in_allowlist=in_allowlist,
         is_delete=is_delete,
+        confirmed=confirmed,
     )
 
     duration_ms = int((time.monotonic() - start_ms) * 1000)
@@ -226,10 +228,11 @@ def check_availability(time_min: str, time_max: str, duration_minutes: int) -> d
 
 @mcp.tool()
 def delete_event(event_id: str, execution_mode: str, calendar_id: str = "primary",
-                 idempotency_key: str = None) -> dict:
-    """Delete a Google Calendar event."""
+                 idempotency_key: str = None, confirmed: bool = False) -> dict:
+    """Delete a Google Calendar event. Set confirmed=True after showing the user the impact."""
     event_input = DeleteEventInput(event_id=event_id, execution_mode=execution_mode,
-                                   calendar_id=calendar_id, idempotency_key=idempotency_key)
+                                   calendar_id=calendar_id, idempotency_key=idempotency_key,
+                                   confirmed=confirmed)
     result = _run_write_pipeline(event_input, op="delete", is_delete=True)
     if result is not None:
         return result

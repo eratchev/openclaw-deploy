@@ -90,6 +90,7 @@ class DeleteEventInput(BaseModel):
     calendar_id: str = "primary"
     execution_mode: Literal["dry_run", "execute"]
     idempotency_key: Optional[str] = None
+    confirmed: bool = False
 
 
 class ListEventsInput(BaseModel):

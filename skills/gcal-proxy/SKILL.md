@@ -46,8 +46,10 @@ gcal list --from "2026-03-10T00:00:00Z" --to "2026-03-17T00:00:00Z" --calendar-i
 **Delete event:**
 ```
 gcal delete --event-id EVENT_ID --mode dry_run
-gcal delete --event-id EVENT_ID --mode execute
+gcal delete --event-id EVENT_ID --mode execute --confirmed
 ```
+
+Always run `dry_run` first. If the user confirms, re-run with `--mode execute --confirmed`.
 
 **Check availability (find free slots):**
 ```
