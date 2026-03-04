@@ -1,7 +1,7 @@
 PROJECT := $(notdir $(CURDIR))
 DATA_VOLUME := $(PROJECT)_openclaw_data
 
-.PHONY: up down logs logs-all restart status backup backup-remote update test kill-switch
+.PHONY: up down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals
 
 # Start all services
 up:
@@ -50,6 +50,15 @@ update:
 # Run guardrail unit tests
 test:
 	pytest tests/ -v
+
+# Configure exec approvals allowlist for calendar (run once after first deploy)
+setup-approvals:
+	docker compose exec openclaw openclaw approvals allowlist add '/home/node/.openclaw/bin/gcal' --agent main --gateway
+	docker compose exec openclaw openclaw approvals allowlist add 'gcal *' --agent main --gateway
+	docker compose exec openclaw openclaw approvals allowlist add '*gcal *' --agent main --gateway
+	docker compose exec openclaw openclaw approvals allowlist add 'date' --agent main --gateway
+	docker compose exec openclaw openclaw approvals allowlist add 'date *' --agent main --gateway
+	@echo "Exec approvals configured. Run 'make logs' to verify."
 
 # Activate manual kill switch
 kill-switch:
