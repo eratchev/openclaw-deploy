@@ -78,7 +78,6 @@ services:
     restart: unless-stopped
     networks:
       - internal
-      - ingress
     depends_on:
       - redis
     volumes:
