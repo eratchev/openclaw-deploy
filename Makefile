@@ -63,7 +63,9 @@ open(p,'w').write(json.dumps(d,indent=2)); print('socket path fixed')"
 	docker compose exec openclaw openclaw approvals allowlist add '*gcal *' --agent main --gateway
 	docker compose exec openclaw openclaw approvals allowlist add 'date' --agent main --gateway
 	docker compose exec openclaw openclaw approvals allowlist add 'date *' --agent main --gateway
-	docker compose exec openclaw openclaw config set tools.exec.safeBins '["gcal","date"]'
+	docker compose exec openclaw openclaw approvals allowlist add 'ai' --agent main --gateway
+	docker compose exec openclaw openclaw approvals allowlist add 'ai *' --agent main --gateway
+	docker compose exec openclaw openclaw config set tools.exec.safeBins '["gcal","date","ai"]'
 	docker compose restart openclaw
 	@echo "Exec approvals configured. Run 'make logs' to verify."
 
