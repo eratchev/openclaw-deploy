@@ -275,7 +275,7 @@ class Guardrail:
             proc = subprocess.Popen(
                 ["openclaw", "logs", "--follow", "--json"],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
                 text=True,
             )
         except FileNotFoundError:

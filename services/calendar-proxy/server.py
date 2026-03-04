@@ -14,7 +14,7 @@ from mcp.server.fastmcp import FastMCP
 from auth import TokenStore
 from audit import AuditLog
 from models import (
-    CreateEventInput, UpdateEventInput, DeleteEventInput,
+    CreateEventInput, DeleteEventInput,
     ListEventsInput, CheckAvailabilityInput,
 )
 from policies import assess, enforce, check_rate_limit, check_idempotency, record_idempotency, idempotency_key_for
@@ -98,11 +98,10 @@ def _run_write_pipeline(event_input, op: str, is_delete: bool = False):
     in_allowlist = calendar_id in _allowed_calendars()
 
     r = get_redis()
-    service = build_google_service()
 
-    # Assess
+    # Assess — only build the Google service if we need to list existing events
     if hasattr(event_input, "title"):
-        impact = assess(event_input, _list_events_fn(service))
+        impact = assess(event_input, _list_events_fn(build_google_service()))
     else:
         impact = None
 
@@ -174,9 +173,10 @@ def handle_create_event(args: dict) -> dict:
     event_id = created["id"]
     idem_key = event_input.idempotency_key or idempotency_key_for("create", event_input.model_dump())
     record_idempotency(get_redis(), idem_key, event_id=event_id)
-    audit.write(request_id=str(uuid.uuid4()), tool="create_event", execution_mode="execute",
+    request_id = str(uuid.uuid4())
+    audit.write(request_id=request_id, tool="create_event", execution_mode="execute",
                 session_id="", args=event_input.model_dump(), status="created", event_id=event_id, duration_ms=0)
-    return {"request_id": str(uuid.uuid4()), "status": "safe_to_execute", "event_id": event_id}
+    return {"request_id": request_id, "status": "safe_to_execute", "event_id": event_id}
 
 
 def handle_list_events(args: dict) -> list:

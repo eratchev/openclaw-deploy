@@ -23,11 +23,12 @@ class AuditLog:
         max_bytes: int = _DEFAULT_MAX_BYTES,
     ):
         self._path = Path(log_path)
+        self._max_bytes = max_bytes
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._rotate_if_needed(max_bytes)
+        self._rotate_if_needed()
 
-    def _rotate_if_needed(self, max_bytes: int) -> None:
-        if self._path.exists() and self._path.stat().st_size > max_bytes:
+    def _rotate_if_needed(self) -> None:
+        if self._path.exists() and self._path.stat().st_size > self._max_bytes:
             rotated = self._path.with_suffix(self._path.suffix + ".1")
             self._path.rename(rotated)
 
@@ -63,5 +64,6 @@ class AuditLog:
         if reason is not None:
             entry["reason"] = reason
 
+        self._rotate_if_needed()
         with self._path.open("a") as f:
             f.write(json.dumps(entry) + "\n")

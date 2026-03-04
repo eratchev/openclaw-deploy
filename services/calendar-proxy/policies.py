@@ -161,14 +161,13 @@ def check_rate_limit(
         limit = int(os.getenv("GCAL_MAX_EVENTS_PER_DAY", "10"))
         key = f"rate_limit:{calendar_id}:{date_str}"
 
-    current = int(r.get(key) or 0)
-    if current >= limit:
-        return False, f"rate limit reached: {current}/{limit} {op}s on {calendar_id} for {date_str}"
-
     pipe = r.pipeline()
     pipe.incr(key)
     pipe.expire(key, 48 * 3600)  # 48h TTL — no DST math needed
-    pipe.execute()
+    new_count, _ = pipe.execute()
+    if new_count > limit:
+        r.decr(key)  # rollback
+        return False, f"rate limit reached: {limit}/{limit} {op}s on {calendar_id} for {date_str}"
     return True, None
 
 

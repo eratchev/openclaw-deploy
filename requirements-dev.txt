@@ -1,1 +1,4 @@
 pytest>=8.0
+fakeredis>=2.20.0
+# calendar-proxy service deps (needed to run tests/calendar_proxy/*)
+# install alongside: pip install -r services/calendar-proxy/requirements.txt

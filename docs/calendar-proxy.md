@@ -171,7 +171,7 @@ docker compose ps redis          # is it running?
 docker compose logs redis        # any errors?
 ```
 
-The `REDIS_URL` in the `calendar-proxy` service is hardcoded to `redis://redis:6379` (no auth), which assumes both containers are on the `internal` network. This is correct — the proxy does not need to use `REDIS_PASSWORD` because it connects via the internal network, not the host interface.
+The `REDIS_URL` in the `calendar-proxy` service is set to `redis://:${REDIS_PASSWORD}@redis:6379` via `docker-compose.yml`. Both containers must be on the `internal` network (they are by default).
 
 ### `denied: calendar_id '...' is not in the allowlist`
 
