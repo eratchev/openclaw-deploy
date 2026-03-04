@@ -1,7 +1,7 @@
 PROJECT := $(notdir $(CURDIR))
 DATA_VOLUME := $(PROJECT)_openclaw_data
 
-.PHONY: up down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals
+.PHONY: up down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals deploy-workspace
 
 # Start all services
 up:
@@ -68,6 +68,13 @@ open(p,'w').write(json.dumps(d,indent=2)); print('socket path fixed')"
 	docker compose exec openclaw openclaw config set tools.exec.safeBins '["gcal","date","ai"]'
 	docker compose restart openclaw
 	@echo "Exec approvals configured. Run 'make logs' to verify."
+
+# Deploy workspace files (AGENTS.md, MEMORY.md, COMMANDS.md) to container
+deploy-workspace:
+	@for f in workspace/*.md; do \
+		docker compose cp $$f openclaw:/home/node/.openclaw/workspace/$$(basename $$f); \
+		echo "Deployed $$f"; \
+	done
 
 # Activate manual kill switch
 kill-switch:
