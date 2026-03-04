@@ -6,14 +6,17 @@ Observes structured JSON logs from OpenClaw and enforces per-session limits.
 Abort mechanism: kill -TERM <openclaw_pid> — kills ALL sessions (Phase 1 limitation).
 No per-session abort available (openclaw session abort does not exist).
 
-Actual log format (discovered 2026-03-02):
+Actual log format (discovered 2026-03-02, tool events confirmed 2026-03-04):
   All events: {"type": "log", "time": "<ISO-8601>", "level": "...", "subsystem": "...", "message": "...", "raw": "..."}
   Session ID: embedded in message as sessionId=<value> — regex-extracted, NOT a top-level field
-  Session register: subsystem="diagnostic", message contains "run registered:"
-  Session clear:    subsystem="diagnostic", message contains "run cleared:"
-  LLM turn start:   subsystem="agent/embedded", message contains "embedded run start:"
-  LLM turn done:    subsystem="agent/embedded", message contains "embedded run done:"
-  Tool calls:       NOT OBSERVED in log sample — MAX_TOOL_CALLS not enforced (TODO)
+  Run ID:     embedded in message as runId=<value> — used by tool events instead of sessionId
+  Session register: subsystem="diagnostic",    message contains "run registered:"
+  Session clear:    subsystem="diagnostic",    message contains "run cleared:"
+  LLM turn start:   subsystem="agent/embedded", message contains "embedded run start:"   (has both runId= and sessionId=)
+  LLM turn done:    subsystem="agent/embedded", message contains "embedded run done:"    (has both runId= and sessionId=)
+  Tool call start:  subsystem="agent/embedded", message contains "embedded run tool start:" (has runId= only, no sessionId=)
+  Tool call end:    subsystem="agent/embedded", message contains "embedded run tool end:"   (has runId= only, no sessionId=)
+  Note: tool events use runId; the runId→sessionId mapping is built from LLM start events.
 """
 
 import os
@@ -36,8 +39,9 @@ SUBSYSTEM_FIELD = "subsystem"
 MESSAGE_FIELD = "message"
 TIMESTAMP_FIELD = "time"  # ISO-8601 string
 
-# Session ID regex — extracted from message string
+# Session ID and Run ID regexes — extracted from message string
 SESSION_ID_RE = re.compile(r'sessionId=(\S+)')
+RUN_ID_RE = re.compile(r'runId=(\S+)')
 
 # Event classifiers (subsystem + message content)
 SUBSYSTEM_DIAGNOSTIC = "diagnostic"
@@ -47,6 +51,7 @@ MSG_SESSION_REGISTER = "run registered:"
 MSG_SESSION_CLEAR = "run cleared:"
 MSG_LLM_START = "embedded run start:"
 MSG_LLM_DONE = "embedded run done:"
+MSG_TOOL_START = "embedded run tool start:"
 
 # ── Config ────────────────────────────────────────────────────────────────────
 KILL_SWITCH_PATH = os.getenv("KILL_SWITCH_PATH", "/home/node/.openclaw/GUARDRAIL_DISABLE")
@@ -74,11 +79,12 @@ class SessionState:
 class Guardrail:
     def __init__(self):
         self.sessions: Dict[str, SessionState] = {}
+        self.runid_to_session: Dict[str, str] = {}  # runId → sessionId, built from LLM start events
         self.openclaw_pid: Optional[int] = None
 
         # Limits (configurable via env)
         self.max_session_seconds = int(os.getenv("MAX_SESSION_SECONDS", "300"))
-        self.max_tool_calls = int(os.getenv("MAX_TOOL_CALLS", "50"))   # not currently enforced (tool events not observed)
+        self.max_tool_calls = int(os.getenv("MAX_TOOL_CALLS", "50"))
         self.max_llm_calls = int(os.getenv("MAX_LLM_CALLS", "30"))
         self.max_idle_seconds = int(os.getenv("MAX_IDLE_SECONDS", "60"))
         self.max_memory_pct = float(os.getenv("MAX_MEMORY_PCT", "90"))
@@ -143,6 +149,9 @@ class Guardrail:
         if session.llm_count >= self.max_llm_calls:
             return f"llm call limit ({session.llm_count} >= {self.max_llm_calls})"
 
+        if session.tool_count >= self.max_tool_calls:
+            return f"tool call limit ({session.tool_count} >= {self.max_tool_calls})"
+
         # Idle check: only if last_event_time is meaningfully in the past relative to now
         idle = now - session.last_event_time
         if idle > self.max_idle_seconds:
@@ -150,11 +159,16 @@ class Guardrail:
 
         return None
 
-    # ── Session ID extraction ─────────────────────────────────────────────────
+    # ── ID extraction ─────────────────────────────────────────────────────────
 
     @staticmethod
     def extract_session_id(message: str) -> Optional[str]:
         m = SESSION_ID_RE.search(message)
+        return m.group(1) if m else None
+
+    @staticmethod
+    def extract_run_id(message: str) -> Optional[str]:
+        m = RUN_ID_RE.search(message)
         return m.group(1) if m else None
 
     # ── Event processing ──────────────────────────────────────────────────────
@@ -167,17 +181,35 @@ class Guardrail:
         subsystem = event.get(SUBSYSTEM_FIELD, "")
         message = event.get(MESSAGE_FIELD, "")
 
-        session_id = self.extract_session_id(message)
-        if not session_id:
-            return
-
         # Use wall-clock time for all session tracking so that limit checks
         # and prune_sessions() operate consistently against real time.
         wall_now = time.time()
 
+        # Tool events use runId (not sessionId) — handle before session_id extraction
+        if subsystem == SUBSYSTEM_AGENT and MSG_TOOL_START in message:
+            run_id = self.extract_run_id(message)
+            sid = self.runid_to_session.get(run_id, "") if run_id else ""
+            if sid and sid in self.sessions:
+                session = self.sessions[sid]
+                session.tool_count += 1
+                session.last_event_time = wall_now
+                violation = self.check_limits(session, wall_now)
+                if violation:
+                    print(f"[guardrail] VIOLATION session={sid}: {violation}", flush=True)
+                    self.sessions.pop(sid, None)
+                    self.kill_openclaw()  # blocks event loop for up to 10s (SIGTERM wait)
+            return
+
+        session_id = self.extract_session_id(message)
+        if not session_id:
+            return
+
         # Session end — clean up and return
         if subsystem == SUBSYSTEM_DIAGNOSTIC and MSG_SESSION_CLEAR in message:
             self.sessions.pop(session_id, None)
+            stale_runs = [rid for rid, rsid in self.runid_to_session.items() if rsid == session_id]
+            for rid in stale_runs:
+                del self.runid_to_session[rid]
             return
 
         # Session register — create state
@@ -202,6 +234,11 @@ class Guardrail:
             session.last_event_time = wall_now
             session.llm_count += 1
 
+            # Map runId → sessionId so subsequent tool events can find this session
+            run_id = self.extract_run_id(message)
+            if run_id:
+                self.runid_to_session[run_id] = session_id
+
             violation = self.check_limits(session, wall_now)
             if violation:
                 print(f"[guardrail] VIOLATION session={session_id}: {violation}", flush=True)
@@ -213,6 +250,10 @@ class Guardrail:
             session = self.sessions.get(session_id)
             if session:
                 session.last_event_time = wall_now
+            # Clean up runId mapping for this completed run
+            run_id = self.extract_run_id(message)
+            if run_id:
+                self.runid_to_session.pop(run_id, None)
             return
 
     # ── Pruning ───────────────────────────────────────────────────────────────
@@ -225,6 +266,9 @@ class Guardrail:
         for sid in stale:
             print(f"[guardrail] Pruning stale session={sid}", flush=True)
             del self.sessions[sid]
+            stale_runs = [rid for rid, rsid in self.runid_to_session.items() if rsid == sid]
+            for rid in stale_runs:
+                del self.runid_to_session[rid]
 
     # ── Memory watchdog ───────────────────────────────────────────────────────
 
@@ -264,9 +308,9 @@ class Guardrail:
             f"[guardrail] Limits: "
             f"session={self.max_session_seconds}s "
             f"llm={self.max_llm_calls} "
+            f"tool_calls={self.max_tool_calls} "
             f"idle={self.max_idle_seconds}s "
-            f"memory={self.max_memory_pct}% "
-            f"tool_calls={self.max_tool_calls} (not enforced — tool events not observed)",
+            f"memory={self.max_memory_pct}%",
             flush=True,
         )
         self.openclaw_pid = self.find_openclaw_pid()

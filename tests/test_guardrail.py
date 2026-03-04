@@ -4,6 +4,7 @@ Unit tests for scripts/guardrail.py
 Log format note: OpenClaw logs are JSONL with these fields:
   type="log", time=ISO8601, level, subsystem, message, raw
 Session IDs are embedded in the message as sessionId=<value> (regex-extracted).
+Tool events use runId=<value> instead; the runId→sessionId mapping is built from LLM start events.
 Events are identified by subsystem + message content, not a type field.
 """
 import time
@@ -46,11 +47,15 @@ def make_session_register(session_id="s1"):
 def make_session_clear(session_id="s1"):
     return make_log_event("diagnostic", f"run cleared: sessionId={session_id}", session_id=None)
 
-def make_llm_start(session_id="s1"):
-    return make_log_event("agent/embedded", f"embedded run start: runId=abc sessionId={session_id} provider=openai model=gpt-4", session_id=None)
+def make_llm_start(session_id="s1", run_id="abc"):
+    return make_log_event("agent/embedded", f"embedded run start: runId={run_id} sessionId={session_id} provider=openai model=gpt-4", session_id=None)
 
-def make_llm_done(session_id="s1"):
-    return make_log_event("agent/embedded", f"embedded run done: runId=abc sessionId={session_id}", session_id=None)
+def make_llm_done(session_id="s1", run_id="abc"):
+    return make_log_event("agent/embedded", f"embedded run done: runId={run_id} sessionId={session_id}", session_id=None)
+
+def make_tool_start(run_id="abc", tool_name="bash"):
+    """Tool events have runId but NOT sessionId."""
+    return make_log_event("agent/embedded", f"embedded run tool start: runId={run_id} tool={tool_name} toolCallId=tc1", session_id=None)
 
 # ── check_limits ─────────────────────────────────────────────────────────────
 
@@ -135,11 +140,83 @@ def test_non_log_events_ignored():
         mock_kill.assert_not_called()
 
 def test_event_without_session_id_ignored():
-    """Events that don't contain sessionId= in message must be silently ignored."""
+    """Diagnostic events that don't contain sessionId= in message must be silently ignored."""
     g = Guardrail()
     with patch.object(g, 'kill_openclaw') as mock_kill:
         g.process_event({"type": "log", "subsystem": "diagnostic", "message": "run registered: no session here", "time": "2026-03-02T23:39:48.579Z"})
         assert len(g.sessions) == 0
+
+# ── tool call tracking ────────────────────────────────────────────────────────
+
+def test_tool_call_violation():
+    g = Guardrail()
+    g.max_tool_calls = 3
+    with patch.object(g, 'kill_openclaw') as mock_kill:
+        g.process_event(make_session_register("abc"))
+        g.process_event(make_llm_start("abc", run_id="r1"))
+        g.process_event(make_tool_start("r1"))   # tool_count=1
+        g.process_event(make_tool_start("r1"))   # tool_count=2
+        mock_kill.assert_not_called()
+        g.process_event(make_tool_start("r1"))   # tool_count=3 >= max=3, violation
+        mock_kill.assert_called_once()
+
+def test_tool_count_increments():
+    g = Guardrail()
+    with patch.object(g, 'kill_openclaw'):
+        g.process_event(make_session_register("abc"))
+        g.process_event(make_llm_start("abc", run_id="r1"))
+        g.process_event(make_tool_start("r1"))
+        g.process_event(make_tool_start("r1"))
+        assert g.sessions["abc"].tool_count == 2
+
+def test_tool_call_no_violation_one_under_limit():
+    g = Guardrail()
+    with patch.object(g, 'kill_openclaw') as mock_kill:
+        g.process_event(make_session_register("abc"))
+        g.process_event(make_llm_start("abc", run_id="r1"))
+        for _ in range(g.max_tool_calls - 1):
+            g.process_event(make_tool_start("r1"))
+        mock_kill.assert_not_called()
+        assert g.sessions["abc"].tool_count == g.max_tool_calls - 1
+
+def test_tool_call_unknown_run_id_ignored():
+    """Tool events with an unknown runId (no prior LLM start) must be silently ignored."""
+    g = Guardrail()
+    with patch.object(g, 'kill_openclaw') as mock_kill:
+        g.process_event(make_tool_start("unknown-run"))
+        assert len(g.sessions) == 0
+        mock_kill.assert_not_called()
+
+def test_runid_mapping_cleaned_up_on_llm_done():
+    g = Guardrail()
+    with patch.object(g, 'kill_openclaw'):
+        g.process_event(make_session_register("abc"))
+        g.process_event(make_llm_start("abc", run_id="r1"))
+        assert "r1" in g.runid_to_session
+        g.process_event(make_llm_done("abc", run_id="r1"))
+        assert "r1" not in g.runid_to_session
+
+def test_runid_mapping_cleaned_up_on_session_clear():
+    g = Guardrail()
+    with patch.object(g, 'kill_openclaw'):
+        g.process_event(make_session_register("abc"))
+        g.process_event(make_llm_start("abc", run_id="r1"))
+        assert "r1" in g.runid_to_session
+        g.process_event(make_session_clear("abc"))
+        assert "r1" not in g.runid_to_session
+        assert "abc" not in g.sessions
+
+def test_tool_check_limits_violation():
+    g = Guardrail()
+    session, now = make_session(tool_count=g.max_tool_calls)
+    result = g.check_limits(session, now)
+    assert result is not None
+    assert "tool" in result.lower()
+
+def test_tool_check_limits_no_violation_one_under():
+    g = Guardrail()
+    session, now = make_session(tool_count=g.max_tool_calls - 1)
+    assert g.check_limits(session, now) is None
 
 # ── kill switch ───────────────────────────────────────────────────────────────
 
