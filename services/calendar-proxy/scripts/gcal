@@ -2,8 +2,8 @@
 """gcal — CLI for the calendar-proxy service.
 
 Usage:
-  gcal create  --title TITLE --start ISO --end ISO --mode (execute|dry_run|needs_confirmation)
-               [--calendar-id ID] [--description TEXT] [--rrule RULE] [--idem-key KEY]
+  gcal create  --title TITLE --start ISO --end ISO --mode (execute|dry_run)
+               [--confirmed] [--calendar-id ID] [--description TEXT] [--rrule RULE] [--idem-key KEY]
   gcal list    --from ISO --to ISO [--calendar-id ID]
   gcal delete  --event-id ID --mode (execute|dry_run) [--confirmed] [--calendar-id ID]
   gcal avail   --from ISO --to ISO --minutes N
@@ -76,7 +76,8 @@ def main():
             print("Error: --title, --start, and --end are required", file=sys.stderr)
             sys.exit(1)
         args = {"title": title, "start": start, "end": end, "execution_mode": mode,
-                "calendar_id": _parse_flag(rest, "--calendar-id", "primary")}
+                "calendar_id": _parse_flag(rest, "--calendar-id", "primary"),
+                "confirmed": "--confirmed" in rest}
         if _parse_flag(rest, "--description"):
             args["description"] = _parse_flag(rest, "--description")
         if _parse_flag(rest, "--rrule"):

@@ -101,6 +101,13 @@ def test_confirmed_bypasses_other_confirmation_flags():
     assert status == "safe_to_execute"
 
 
+def test_confirmed_bypasses_outside_hours():
+    impact = _impact(outside_business_hours=True)
+    status, reason = enforce(impact, calendar_id="primary", in_allowlist=True, confirmed=True)
+    assert status == "safe_to_execute"
+    assert reason is None
+
+
 def test_confirmed_does_not_bypass_hard_denial():
     impact = _impact(recurring=True, work_calendar=True, outside_business_hours=True)
     status, reason = enforce(impact, calendar_id="primary", in_allowlist=True, confirmed=True)

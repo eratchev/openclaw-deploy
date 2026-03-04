@@ -32,10 +32,10 @@ gcal health
 **Create event:**
 ```
 gcal create --title "Meeting" --start "2026-03-10T14:00:00+03:00" --end "2026-03-10T15:00:00+03:00" --mode dry_run
-gcal create --title "Meeting" --start "2026-03-10T14:00:00+03:00" --end "2026-03-10T15:00:00+03:00" --mode execute
+gcal create --title "Meeting" --start "2026-03-10T14:00:00+03:00" --end "2026-03-10T15:00:00+03:00" --mode execute --confirmed
 ```
 
-Optional flags: `--calendar-id ID`, `--description TEXT`, `--rrule RRULE_STRING`, `--idem-key KEY`
+Optional flags: `--confirmed` (bypass needs_confirmation after user approves), `--calendar-id ID`, `--description TEXT`, `--rrule RRULE_STRING`, `--idem-key KEY`
 
 **List events:**
 ```

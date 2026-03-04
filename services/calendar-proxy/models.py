@@ -53,6 +53,7 @@ class CreateEventInput(BaseModel):
     recurrence: Optional[RecurrenceRule] = None
     execution_mode: Literal["dry_run", "execute"]
     idempotency_key: Optional[str] = None
+    confirmed: bool = False
 
     @field_validator("start", "end")
     @classmethod

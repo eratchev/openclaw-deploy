@@ -197,10 +197,11 @@ def get_health() -> dict:
 @mcp.tool()
 def create_event(title: str, start: str, end: str, execution_mode: str,
                  calendar_id: str = "primary", description: str = None,
-                 recurrence_rrule: str = None, idempotency_key: str = None) -> dict:
+                 recurrence_rrule: str = None, idempotency_key: str = None,
+                 confirmed: bool = False) -> dict:
     """Create a Google Calendar event."""
     args = {"title": title, "start": start, "end": end, "execution_mode": execution_mode,
-            "calendar_id": calendar_id}
+            "calendar_id": calendar_id, "confirmed": confirmed}
     if description:
         args["description"] = description
     if recurrence_rrule:
