@@ -53,6 +53,11 @@ test:
 
 # Configure exec approvals allowlist for calendar (run once after first deploy)
 setup-approvals:
+	@echo "Fixing exec-approvals socket path (macOS path breaks on Linux)..."
+	docker compose exec openclaw python3 -c "\
+import json; p='/home/node/.openclaw/exec-approvals.json'; \
+d=json.load(open(p)); d['socket']['path']='/home/node/.openclaw/exec-approvals.sock'; \
+open(p,'w').write(json.dumps(d,indent=2)); print('socket path fixed')"
 	docker compose exec openclaw openclaw approvals allowlist add '/home/node/.openclaw/bin/gcal' --agent main --gateway
 	docker compose exec openclaw openclaw approvals allowlist add 'gcal *' --agent main --gateway
 	docker compose exec openclaw openclaw approvals allowlist add '*gcal *' --agent main --gateway
