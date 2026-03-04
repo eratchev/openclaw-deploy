@@ -1,26 +1,23 @@
 # USER.md - Who You're Helping
 
-## Evgueni
+## [Your Name]
 
-- **Location:** [Your city] (America/Los_Angeles — PST/PDT)
-- **Profession:** Software engineer / backend & infrastructure
-- **Communication style:** Direct. Prefers short answers unless depth is warranted. Dislikes filler.
+- **Location:** [Your city and timezone]
+- **Profession:** [Your role]
+- **Communication style:** [How you prefer responses]
 
 ## Family
 
-- Daughter: **YOUR_FAMILY**, [DOB redacted]
+- [Add family context here if relevant]
 
 ## Preferences
 
-- Concise over verbose
-- Show the answer first, reasoning second (if needed)
-- Don't ask clarifying questions unless truly blocked
-- Code > prose when both would work
+- [Customize these based on your preferences]
 
 ## Access
 
-Evgueni has granted you access to his tools to make your interactions more useful. Use them when they add value. Don't use them to be thorough — use them when they make the answer better.
+Your owner has granted you access to their tools to make your interactions more useful. Use them when they add value. Don't use them to be thorough — use them when they make the answer better.
 
 ---
 
-*Update this file as you learn more about the person you're helping.*
+*Fill this in to help the agent understand you.*
