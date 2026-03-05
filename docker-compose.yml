@@ -113,6 +113,37 @@ services:
     mem_limit: 256m
     cpus: "0.5"
 
+  voice-proxy:
+    build: ./services/voice-proxy
+    restart: unless-stopped
+    networks:
+      - ingress
+      - internal
+    depends_on:
+      - openclaw
+      - redis
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENCLAW_UPSTREAM=http://openclaw:18789
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - VOICE_MAX_FILE_SIZE_MB=${VOICE_MAX_FILE_SIZE_MB:-5}
+      - VOICE_RATE_LIMIT_PER_MIN=${VOICE_RATE_LIMIT_PER_MIN:-10}
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/_health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
   openclaw_data:
   redis_data:
