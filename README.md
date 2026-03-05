@@ -157,12 +157,29 @@ See [docs/calendar-proxy.md](docs/calendar-proxy.md) for tuning, health checks, 
 Automatically transcribes Telegram voice notes via OpenAI Whisper so you can speak to OpenClaw hands-free.
 
 **Setup:**
-1. Add `OPENAI_API_KEY=sk-...` to `.env`
-2. `make up-voice`
-3. Send a voice note to your bot — it should reply as if you typed the text
+
+1. Add to `.env`:
+   ```bash
+   OPENAI_API_KEY=sk-...
+   TELEGRAM_TOKEN=<your bot token>   # same token as channels.telegram.botToken in openclaw.json
+   ```
+
+2. Configure OpenClaw for webhook mode (required — voice-proxy intercepts incoming webhook POSTs; long-polling cannot be intercepted):
+   ```bash
+   # Set secret before URL or validation fails
+   docker compose exec openclaw openclaw config set channels.telegram.webhookSecret <random-32-char-hex>
+   docker compose exec openclaw openclaw config set channels.telegram.webhookUrl https://<your-domain>/telegram-webhook
+   docker compose exec openclaw openclaw config set channels.telegram.webhookHost 0.0.0.0
+   ```
+
+3. `make up-voice`
+
+4. Send a voice note to your bot — it should reply as if you typed the text.
 
 **Cost:** ~$0.006/min (OpenAI Whisper). Negligible for personal use.
 **Rate limit:** 10 voice messages/minute per chat (configurable via `VOICE_RATE_LIMIT_PER_MIN`).
+
+**Troubleshooting:** Check `docker compose logs voice-proxy`. Each voice request logs `status=ok|error|no_api_key|rate_limited|size_exceeded`.
 
 ## Brave Search *(optional)*
 
