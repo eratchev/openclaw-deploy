@@ -139,7 +139,7 @@ services:
     mem_limit: 256m
     cpus: "0.5"
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/_health')"]
       interval: 30s
       timeout: 5s
       retries: 3

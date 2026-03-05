@@ -178,7 +178,7 @@ async def handle_request(request: web.Request) -> web.Response:
     transcription: Optional[str] = None
     status = "ok"
 
-    if file_size > VOICE_MAX_BYTES:
+    if file_size >= VOICE_MAX_BYTES:
         status = "size_exceeded"
     elif await is_rate_limited(_redis, chat_id, VOICE_RATE_LIMIT_PER_MIN):
         status = "rate_limited"
@@ -227,10 +227,16 @@ async def on_cleanup(app: web.Application) -> None:
         await _redis.aclose()
 
 
+async def health(request: web.Request) -> web.Response:
+    """Health check endpoint — returns 200 without touching the proxy pipeline."""
+    return web.Response(status=200, text="ok")
+
+
 def make_app() -> web.Application:
     app = web.Application()
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
+    app.router.add_get("/_health", health)
     app.router.add_route("*", "/{path_info:.*}", handle_request)
     return app
 
