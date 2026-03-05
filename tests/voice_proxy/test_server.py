@@ -135,6 +135,7 @@ async def test_oversized_voice_sends_fallback(fake_redis):
 
     with patch.object(server, "_redis", fake_redis), \
          patch.object(server, "_session", AsyncMock()), \
+         patch.object(server, "is_rate_limited", new_callable=AsyncMock, return_value=False) as mock_rate, \
          patch.object(server, "transcribe_audio", new_callable=AsyncMock) as mock_transcribe, \
          patch.object(server, "forward_raw", side_effect=mock_forward):
         app = server.make_app()
@@ -144,6 +145,7 @@ async def test_oversized_voice_sends_fallback(fake_redis):
             await client.post("/", data=raw_body, headers={"Content-Type": "application/json"})
 
     mock_transcribe.assert_not_called()
+    mock_rate.assert_not_called()  # size check should short-circuit before rate limit
     assert "transcription failed" in forwarded[0]["message"]["text"]
 
 
