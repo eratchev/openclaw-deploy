@@ -150,3 +150,90 @@ async def forward_raw(
             body=resp_body,
             content_type=resp.content_type or "application/json",
         )
+
+
+# ── Request handler ─────────────────────────────────────────────────────────
+
+async def handle_request(request: web.Request) -> web.Response:
+    """Main handler: intercepts voice/audio, forwards everything else unchanged."""
+    raw_body = await request.read()
+    path = request.path_qs
+    headers = dict(request.headers)
+
+    # Parse JSON; if not JSON forward raw
+    try:
+        update = json.loads(raw_body)
+    except (json.JSONDecodeError, ValueError):
+        return await forward_raw(raw_body, path, headers, OPENCLAW_UPSTREAM, _session)
+
+    voice = detect_voice(update)
+    if not voice:
+        return await forward_raw(raw_body, path, headers, OPENCLAW_UPSTREAM, _session)
+
+    # Voice/audio path
+    t0 = time.monotonic()
+    chat_id = get_chat_id(update) or 0
+    file_size = voice.get("file_size", 0)
+    duration = voice.get("duration", 0)
+    transcription: Optional[str] = None
+    status = "ok"
+
+    if file_size > VOICE_MAX_BYTES:
+        status = "size_exceeded"
+    elif await is_rate_limited(_redis, chat_id, VOICE_RATE_LIMIT_PER_MIN):
+        status = "rate_limited"
+    else:
+        try:
+            file_id = voice["file_id"]
+            file_path = await get_file_path(TELEGRAM_TOKEN, file_id, _session)
+            audio_bytes = await download_audio(TELEGRAM_TOKEN, file_path, _session)
+            if OPENAI_API_KEY:
+                transcription = await transcribe_audio(audio_bytes, OPENAI_API_KEY)
+            else:
+                status = "no_api_key"
+        except Exception as exc:
+            log.warning("transcription error chat_id=%s: %s", chat_id, exc)
+            status = "error"
+
+    text = transcription if transcription else FALLBACK_TEXT
+    mutated = mutate_update(update, text)
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "voice chat_id=%s duration_s=%s size_bytes=%s transcription_ms=%s status=%s",
+        chat_id, duration, file_size, elapsed_ms, status,
+    )
+
+    mutated_body = json.dumps(mutated).encode()
+    try:
+        return await forward_raw(mutated_body, path, headers, OPENCLAW_UPSTREAM, _session)
+    except Exception as exc:
+        log.error("forward to openclaw failed: %s", exc)
+        return web.Response(status=200, text="ok")
+
+
+# ── App factory ─────────────────────────────────────────────────────────────
+
+async def on_startup(app: web.Application) -> None:
+    global _redis, _session
+    _redis = aioredis.from_url(REDIS_URL)
+    _session = aiohttp.ClientSession()
+    log.info("voice-proxy started upstream=%s", OPENCLAW_UPSTREAM)
+
+
+async def on_cleanup(app: web.Application) -> None:
+    if _session:
+        await _session.close()
+    if _redis:
+        await _redis.aclose()
+
+
+def make_app() -> web.Application:
+    app = web.Application()
+    app.on_startup.append(on_startup)
+    app.on_cleanup.append(on_cleanup)
+    app.router.add_route("*", "/{path_info:.*}", handle_request)
+    return app
+
+
+if __name__ == "__main__":
+    web.run_app(make_app(), host="0.0.0.0", port=8090)
