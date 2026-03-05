@@ -60,7 +60,12 @@ def mutate_update(update: dict, transcription: str) -> dict:
     Adds voice_transcription=True flag.
     """
     mutated = copy.deepcopy(update)
-    msg_key = "message" if "message" in mutated else "edited_message"
+    msg_key = next(
+        (k for k in ("message", "edited_message") if k in mutated),
+        None,
+    )
+    if msg_key is None:
+        return mutated  # nothing to mutate; return unchanged deep copy
     mutated[msg_key]["text"] = transcription
     mutated[msg_key]["voice_transcription"] = True
     return mutated

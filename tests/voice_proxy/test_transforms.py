@@ -1,7 +1,5 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../services/voice-proxy"))
-os.environ.setdefault("TELEGRAM_TOKEN", "test")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
 
 from server import detect_voice, get_chat_id, mutate_update
 
@@ -70,3 +68,9 @@ def test_mutate_update_handles_edited_message():
     update = {"edited_message": {"voice": {"file_id": "abc"}}}
     result = mutate_update(update, "hi")
     assert result["edited_message"]["text"] == "hi"
+
+def test_mutate_update_returns_unchanged_for_unknown_update_type():
+    update = {"callback_query": {"data": "something"}}
+    result = mutate_update(update, "hi")
+    assert "callback_query" in result
+    assert "text" not in result.get("callback_query", {})
