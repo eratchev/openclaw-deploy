@@ -1,4 +1,8 @@
 pytest>=8.0
 fakeredis>=2.20.0
+pytest-asyncio>=0.23
+aioresponses>=0.7
+# voice-proxy service deps (needed to run tests/voice_proxy/*)
+# install alongside: pip install -r services/voice-proxy/requirements.txt
 # calendar-proxy service deps (needed to run tests/calendar_proxy/*)
 # install alongside: pip install -r services/calendar-proxy/requirements.txt
