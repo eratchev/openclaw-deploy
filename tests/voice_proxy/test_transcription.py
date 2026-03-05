@@ -31,8 +31,7 @@ async def test_transcribe_calls_whisper_1_model():
         await transcribe_audio(b"audio", "test-key")
 
     call_kwargs = mock_client.audio.transcriptions.create.call_args
-    assert call_kwargs.kwargs.get("model") == "whisper-1" or call_kwargs.args[0] if call_kwargs.args else False or \
-        any(v == "whisper-1" for v in (call_kwargs.kwargs or {}).values())
+    assert call_kwargs.kwargs.get("model") == "whisper-1"
 
 
 async def test_transcribe_passes_bytes_as_file():
@@ -52,11 +51,14 @@ async def test_transcribe_passes_bytes_as_file():
 
 async def test_transcribe_timeout_raises():
     import asyncio
-    mock_client = AsyncMock()
-    mock_client.audio.transcriptions.create = AsyncMock(
-        side_effect=asyncio.TimeoutError()
-    )
 
-    with patch("server.openai.AsyncOpenAI", return_value=mock_client):
+    async def slow_create(**kwargs):
+        await asyncio.sleep(100)  # longer than any realistic test timeout
+
+    mock_client = AsyncMock()
+    mock_client.audio.transcriptions.create = slow_create
+
+    with patch("server.openai.AsyncOpenAI", return_value=mock_client), \
+         patch("server.WHISPER_TIMEOUT", 0.01):  # short timeout for test speed
         with pytest.raises(asyncio.TimeoutError):
             await transcribe_audio(b"audio", "key")
