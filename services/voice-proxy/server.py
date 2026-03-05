@@ -121,3 +121,32 @@ async def transcribe_audio(audio_bytes: bytes, api_key: str) -> str:
         timeout=WHISPER_TIMEOUT,
     )
     return result.text
+
+
+# ── HTTP forwarding ─────────────────────────────────────────────────────────
+
+_FORWARD_TIMEOUT = aiohttp.ClientTimeout(total=10)
+_SKIP_HEADERS = frozenset({"host", "content-length", "transfer-encoding"})
+
+
+async def forward_raw(
+    body: bytes,
+    path: str,
+    headers: dict,
+    upstream: str,
+    session: aiohttp.ClientSession,
+) -> web.Response:
+    """Forward raw bytes to openclaw upstream, return its response."""
+    forward_headers = {k: v for k, v in headers.items() if k.lower() not in _SKIP_HEADERS}
+    async with session.post(
+        f"{upstream}{path}",
+        data=body,
+        headers=forward_headers,
+        timeout=_FORWARD_TIMEOUT,
+    ) as resp:
+        resp_body = await resp.read()
+        return web.Response(
+            status=resp.status,
+            body=resp_body,
+            content_type=resp.content_type or "application/json",
+        )
