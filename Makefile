@@ -1,7 +1,7 @@
 PROJECT := $(notdir $(CURDIR))
 DATA_VOLUME := $(PROJECT)_openclaw_data
 
-.PHONY: up up-calendar down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals deploy-workspace
+.PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals deploy-workspace
 
 # Start base services (caddy, openclaw, redis)
 up:
@@ -10,6 +10,12 @@ up:
 # Start base services + Google Calendar proxy
 up-calendar:
 	docker compose --profile calendar up -d
+
+# Start base services + voice transcription proxy
+up-voice:
+	docker compose up -d --build voice-proxy
+	docker compose restart caddy
+	@echo "Voice proxy started. Test by sending a voice note to your bot."
 
 # Stop all services
 down:

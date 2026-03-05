@@ -1,3 +1,3 @@
 {$DOMAIN} {
-    reverse_proxy openclaw:18789
+    reverse_proxy voice-proxy:8090
 }
