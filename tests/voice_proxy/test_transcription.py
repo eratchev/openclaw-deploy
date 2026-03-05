@@ -4,44 +4,49 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../services/voice
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from server import transcribe_audio
-
 pytestmark = pytest.mark.asyncio
 
 
+def _server():
+    return sys.modules["server"]
+
+
 async def test_transcribe_returns_text():
+    server = _server()
     mock_result = MagicMock()
     mock_result.text = "hello world"
     mock_client = AsyncMock()
     mock_client.audio.transcriptions.create = AsyncMock(return_value=mock_result)
 
-    with patch("server.openai.AsyncOpenAI", return_value=mock_client):
-        result = await transcribe_audio(b"fake_audio_bytes", "test-key")
+    with patch.object(server, "_openai", mock_client):
+        result = await server.transcribe_audio(b"fake_audio_bytes")
 
     assert result == "hello world"
 
 
 async def test_transcribe_calls_whisper_1_model():
+    server = _server()
     mock_result = MagicMock()
     mock_result.text = "test"
     mock_client = AsyncMock()
     mock_client.audio.transcriptions.create = AsyncMock(return_value=mock_result)
 
-    with patch("server.openai.AsyncOpenAI", return_value=mock_client):
-        await transcribe_audio(b"audio", "test-key")
+    with patch.object(server, "_openai", mock_client):
+        await server.transcribe_audio(b"audio")
 
     call_kwargs = mock_client.audio.transcriptions.create.call_args
     assert call_kwargs.kwargs.get("model") == "whisper-1"
 
 
 async def test_transcribe_passes_bytes_as_file():
+    server = _server()
     mock_result = MagicMock()
     mock_result.text = "hi"
     mock_client = AsyncMock()
     mock_client.audio.transcriptions.create = AsyncMock(return_value=mock_result)
 
-    with patch("server.openai.AsyncOpenAI", return_value=mock_client):
-        await transcribe_audio(b"\x00\x01\x02", "key")
+    with patch.object(server, "_openai", mock_client):
+        await server.transcribe_audio(b"\x00\x01\x02")
 
     call_kwargs = mock_client.audio.transcriptions.create.call_args.kwargs
     audio_file = call_kwargs["file"]
@@ -51,14 +56,15 @@ async def test_transcribe_passes_bytes_as_file():
 
 async def test_transcribe_timeout_raises():
     import asyncio
+    server = _server()
 
     async def slow_create(**kwargs):
-        await asyncio.sleep(100)  # longer than any realistic test timeout
+        await asyncio.sleep(100)
 
     mock_client = AsyncMock()
     mock_client.audio.transcriptions.create = slow_create
 
-    with patch("server.openai.AsyncOpenAI", return_value=mock_client), \
-         patch("server.WHISPER_TIMEOUT", 0.01):  # short timeout for test speed
+    with patch.object(server, "_openai", mock_client), \
+         patch.object(server, "WHISPER_TIMEOUT", 0.01):
         with pytest.raises(asyncio.TimeoutError):
-            await transcribe_audio(b"audio", "key")
+            await server.transcribe_audio(b"audio")

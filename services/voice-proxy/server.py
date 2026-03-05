@@ -3,7 +3,7 @@ voice-proxy — Telegram webhook transformer.
 
 Sits between Caddy and OpenClaw. Intercepts Telegram webhook updates,
 transcribes voice/audio messages via OpenAI Whisper API (in-memory),
-mutates the JSON payload, and forwards to openclaw:18789.
+mutates the JSON payload, and forwards to openclaw:8787 (Telegram webhook server).
 All non-voice traffic is forwarded unchanged.
 """
 import asyncio
@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 # ── Config ─────────────────────────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENCLAW_UPSTREAM = os.environ.get("OPENCLAW_UPSTREAM", "http://openclaw:18789")
+OPENCLAW_UPSTREAM = os.environ.get("OPENCLAW_UPSTREAM", "http://openclaw:8787")
 REDIS_URL = os.environ["REDIS_URL"]
 VOICE_MAX_BYTES = float(os.environ.get("VOICE_MAX_FILE_SIZE_MB", "5")) * 1024 * 1024
 VOICE_RATE_LIMIT_PER_MIN = int(os.environ.get("VOICE_RATE_LIMIT_PER_MIN", "10"))
@@ -38,6 +38,7 @@ TELEGRAM_API = "https://api.telegram.org"
 # ── Module-level singletons (initialised in on_startup) ────────────────────
 _redis: Optional[aioredis.Redis] = None
 _session: Optional[aiohttp.ClientSession] = None
+_openai: Optional[openai.AsyncOpenAI] = None
 
 # ── Pure transform functions ────────────────────────────────────────────────
 
@@ -88,13 +89,14 @@ async def is_rate_limited(r: aioredis.Redis, chat_id: int, limit: int) -> bool:
 
 # ── Telegram file download ──────────────────────────────────────────────────
 
-_DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=5)
+_GETFILE_TIMEOUT = aiohttp.ClientTimeout(total=5)
+_AUDIO_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
 async def get_file_path(token: str, file_id: str, session: aiohttp.ClientSession) -> str:
     """Call getFile API to resolve file_id → file_path for download."""
     url = f"{TELEGRAM_API}/bot{token}/getFile"
-    async with session.get(url, params={"file_id": file_id}, timeout=_DOWNLOAD_TIMEOUT) as resp:
+    async with session.get(url, params={"file_id": file_id}, timeout=_GETFILE_TIMEOUT) as resp:
         data = await resp.json()
     if not data.get("ok"):
         raise RuntimeError(f"getFile failed: {data}")
@@ -104,20 +106,19 @@ async def get_file_path(token: str, file_id: str, session: aiohttp.ClientSession
 async def download_audio(token: str, file_path: str, session: aiohttp.ClientSession) -> bytes:
     """Download audio file bytes into memory (no disk write)."""
     url = f"{TELEGRAM_API}/file/bot{token}/{file_path}"
-    async with session.get(url, timeout=_DOWNLOAD_TIMEOUT) as resp:
+    async with session.get(url, timeout=_AUDIO_TIMEOUT) as resp:
         resp.raise_for_status()
         return await resp.read()
 
 
 # ── Whisper transcription ───────────────────────────────────────────────────
 
-async def transcribe_audio(audio_bytes: bytes, api_key: str) -> str:
+async def transcribe_audio(audio_bytes: bytes) -> str:
     """Transcribe audio bytes via OpenAI Whisper API (in-memory, no disk)."""
-    client = openai.AsyncOpenAI(api_key=api_key)
     buf = io.BytesIO(audio_bytes)
     buf.name = "voice.ogg"  # OpenAI SDK uses name to detect content-type
     result = await asyncio.wait_for(
-        client.audio.transcriptions.create(model="whisper-1", file=buf),
+        _openai.audio.transcriptions.create(model="whisper-1", file=buf),
         timeout=WHISPER_TIMEOUT,
     )
     return result.text
@@ -188,7 +189,7 @@ async def handle_request(request: web.Request) -> web.Response:
             file_path = await get_file_path(TELEGRAM_TOKEN, file_id, _session)
             audio_bytes = await download_audio(TELEGRAM_TOKEN, file_path, _session)
             if OPENAI_API_KEY:
-                transcription = await transcribe_audio(audio_bytes, OPENAI_API_KEY)
+                transcription = await transcribe_audio(audio_bytes)
             else:
                 status = "no_api_key"
         except Exception as exc:
@@ -214,9 +215,11 @@ async def handle_request(request: web.Request) -> web.Response:
 # ── App factory ─────────────────────────────────────────────────────────────
 
 async def on_startup(app: web.Application) -> None:
-    global _redis, _session
+    global _redis, _session, _openai
     _redis = aioredis.from_url(REDIS_URL)
     _session = aiohttp.ClientSession()
+    if OPENAI_API_KEY:
+        _openai = openai.AsyncOpenAI(api_key=OPENAI_API_KEY)
     log.info("voice-proxy started upstream=%s", OPENCLAW_UPSTREAM)
 
 
@@ -225,6 +228,8 @@ async def on_cleanup(app: web.Application) -> None:
         await _session.close()
     if _redis:
         await _redis.aclose()
+    if _openai:
+        await _openai.close()
 
 
 async def health(request: web.Request) -> web.Response:
