@@ -84,3 +84,26 @@ async def is_rate_limited(r: aioredis.Redis, chat_id: int, limit: int) -> bool:
     if count == 1:
         await r.expire(key, 120)
     return count > limit
+
+
+# ── Telegram file download ──────────────────────────────────────────────────
+
+_DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=5)
+
+
+async def get_file_path(token: str, file_id: str, session: aiohttp.ClientSession) -> str:
+    """Call getFile API to resolve file_id → file_path for download."""
+    url = f"{TELEGRAM_API}/bot{token}/getFile"
+    async with session.get(url, params={"file_id": file_id}, timeout=_DOWNLOAD_TIMEOUT) as resp:
+        data = await resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"getFile failed: {data}")
+    return data["result"]["file_path"]
+
+
+async def download_audio(token: str, file_path: str, session: aiohttp.ClientSession) -> bytes:
+    """Download audio file bytes into memory (no disk write)."""
+    url = f"{TELEGRAM_API}/file/bot{token}/{file_path}"
+    async with session.get(url, timeout=_DOWNLOAD_TIMEOUT) as resp:
+        resp.raise_for_status()
+        return await resp.read()
