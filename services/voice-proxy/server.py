@@ -107,3 +107,17 @@ async def download_audio(token: str, file_path: str, session: aiohttp.ClientSess
     async with session.get(url, timeout=_DOWNLOAD_TIMEOUT) as resp:
         resp.raise_for_status()
         return await resp.read()
+
+
+# ── Whisper transcription ───────────────────────────────────────────────────
+
+async def transcribe_audio(audio_bytes: bytes, api_key: str) -> str:
+    """Transcribe audio bytes via OpenAI Whisper API (in-memory, no disk)."""
+    client = openai.AsyncOpenAI(api_key=api_key)
+    buf = io.BytesIO(audio_bytes)
+    buf.name = "voice.ogg"  # OpenAI SDK uses name to detect content-type
+    result = await asyncio.wait_for(
+        client.audio.transcriptions.create(model="whisper-1", file=buf),
+        timeout=WHISPER_TIMEOUT,
+    )
+    return result.text
