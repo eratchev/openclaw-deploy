@@ -18,11 +18,11 @@ async def test_first_message_is_not_rate_limited():
     assert await is_rate_limited(r, chat_id=1, limit=10) is False
 
 
-async def test_at_limit_is_rate_limited():
+async def test_over_limit_is_rate_limited():
     r = await make_redis()
     for _ in range(10):
         await is_rate_limited(r, chat_id=1, limit=10)
-    # 11th call exceeds limit=10
+    # 11th call (count=11 > limit=10) is blocked
     assert await is_rate_limited(r, chat_id=1, limit=10) is True
 
 
