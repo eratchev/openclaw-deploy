@@ -18,6 +18,13 @@ Internet
 │  │  └───┬────┘                          │   │
 │  │      │                               │   │
 │  │  ┌───▼──────────────────────────┐    │   │
+│  │  │  voice-proxy (hardened)      │    │   │
+│  │  │  - Telegram webhook xformer  │    │   │
+│  │  │  - voice → Whisper → text    │    │   │
+│  │  │  - non-root, cap_drop        │    │   │
+│  │  └───┬──────────────────────────┘    │   │
+│  │      │  [ingress + internal]         │   │
+│  │  ┌───▼──────────────────────────┐    │   │
 │  │  │  openclaw (hardened)         │    │   │
 │  │  │  - Gateway daemon            │    │   │
 │  │  │  - Telegram + WhatsApp       │    │   │
@@ -30,10 +37,12 @@ Internet
 │  │  │session │      │ - MCP server   │  │   │
 │  │  │ store  │      │ - policy engine│  │   │
 │  │  └────────┘      │ - non-root     │  │   │
-│  │                  └────────────────┘  │   │
-│  │                      │               │   │
-│  │  /data volume ◄───────┘  (token.enc, │   │
-│  │  (shared)             audit.log)     │   │
+│  │      ▲           └────────────────┘  │   │
+│  │      │               │               │   │
+│  │  voice-proxy         │               │   │
+│  │  rate limits         │               │   │
+│  │                  /data volume ◄───────┘   │
+│  │                  (token.enc, audit.log)   │
 │  └──────────────────────────────────────┘   │
 │                                             │
 │  UFW: 22 (SSH) + 80 (ACME) + 443 only      │
@@ -46,6 +55,7 @@ Internet
 | Service          | ingress network | internal network |
 |------------------|:--------------:|:----------------:|
 | Caddy            | yes            | no               |
+| voice-proxy      | yes            | yes              |
 | OpenClaw         | yes            | yes              |
 | Redis            | no             | yes              |
 | calendar-proxy   | no             | yes              |
@@ -55,6 +65,8 @@ This is enforced explicitly in `docker-compose.yml` — not just implied by conv
 ## Service Roles
 
 **Caddy** sits at the edge and is the only service that accepts inbound traffic from the internet. It terminates TLS using an automatically provisioned Let's Encrypt certificate and reverse-proxies HTTPS requests to OpenClaw. Caddy is on the `ingress` network only. It has no path to Redis and no knowledge of session state. Keeping Caddy at the edge means the TLS termination point has no access to any sensitive internal data.
+
+**voice-proxy** is a transparent Python (aiohttp) webhook transformer that sits between Caddy and OpenClaw. It receives every Telegram webhook POST from Caddy. If the update contains a `message.voice` or `message.audio` field, it downloads the audio into memory (BytesIO — no disk writes), transcribes it via OpenAI Whisper API, mutates the JSON payload (adds `message.text`, sets `message.voice_transcription = true`, keeps the original `voice` field), and forwards the modified update to OpenClaw. All other updates are forwarded unchanged. OpenClaw receives a normal text message and has no knowledge of the voice note. voice-proxy needs both networks: `ingress` to receive traffic from Caddy and make outbound calls to the Telegram and OpenAI APIs, and `internal` to forward to OpenClaw and enforce per-minute rate limits via Redis.
 
 **OpenClaw** runs the Gateway daemon that handles Telegram and WhatsApp messaging, invokes LLM APIs, and executes tools and skills. It sits on both networks because it must accept proxied requests from Caddy (via `ingress`) and read and write session state in Redis (via `internal`). It is the only service that spans both networks, which is intentional — it is the integration point, and it is the most constrained: non-root UID 1000, all Linux capabilities dropped, read-only root filesystem, resource limits, and no Docker socket access.
 

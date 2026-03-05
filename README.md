@@ -152,6 +152,18 @@ This configures the `gcal` and `date` binaries on the exec allowlist so the agen
 
 See [docs/calendar-proxy.md](docs/calendar-proxy.md) for tuning, health checks, and troubleshooting.
 
+### Voice Transcription *(optional)*
+
+Automatically transcribes Telegram voice notes via OpenAI Whisper so you can speak to OpenClaw hands-free.
+
+**Setup:**
+1. Add `OPENAI_API_KEY=sk-...` to `.env`
+2. `make up-voice`
+3. Send a voice note to your bot — it should reply as if you typed the text
+
+**Cost:** ~$0.006/min (OpenAI Whisper). Negligible for personal use.
+**Rate limit:** 10 voice messages/minute per chat (configurable via `VOICE_RATE_LIMIT_PER_MIN`).
+
 ## Brave Search *(optional)*
 
 The agent can search the web using the Brave Search API. Get a free API key at [brave.com/search/api](https://brave.com/search/api), then configure it in the running container:
