@@ -69,3 +69,18 @@ def mutate_update(update: dict, transcription: str) -> dict:
     mutated[msg_key]["text"] = transcription
     mutated[msg_key]["voice_transcription"] = True
     return mutated
+
+
+# ── Rate limiting ───────────────────────────────────────────────────────────
+
+async def is_rate_limited(r: aioredis.Redis, chat_id: int, limit: int) -> bool:
+    """Return True if chat_id has exceeded limit voice messages in the current minute.
+
+    Uses a per-minute bucket key with 2-minute TTL.
+    """
+    bucket = int(time.time()) // 60
+    key = f"voice_rate:{chat_id}:{bucket}"
+    count = await r.incr(key)
+    if count == 1:
+        await r.expire(key, 120)
+    return count > limit
