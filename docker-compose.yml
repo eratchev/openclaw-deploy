@@ -125,7 +125,7 @@ services:
     environment:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENCLAW_UPSTREAM=http://openclaw:18789
+      - OPENCLAW_UPSTREAM=http://openclaw:8787
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - VOICE_MAX_FILE_SIZE_MB=${VOICE_MAX_FILE_SIZE_MB:-5}
       - VOICE_RATE_LIMIT_PER_MIN=${VOICE_RATE_LIMIT_PER_MIN:-10}
