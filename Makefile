@@ -59,7 +59,7 @@ update:
 
 # Run guardrail unit tests
 test:
-	pip install -q -r requirements-dev.txt -r services/calendar-proxy/requirements.txt
+	pip install -q -r requirements-dev.txt -r services/calendar-proxy/requirements.txt -r services/voice-proxy/requirements.txt
 	pytest tests/ -v
 
 # Configure exec approvals allowlist for calendar (run once after first deploy)
