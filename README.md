@@ -36,43 +36,36 @@ Out of the box you get:
 
 ## Quickstart
 
-1. Clone this repo on your VPS
-2. Run `sudo bash scripts/provision.sh`
-3. Copy `.env.example` to `.env` and fill in your values
-4. Copy your local OpenClaw config to the VPS data volume:
-   ```bash
-   # On your local machine
-   rsync -av ~/.openclaw/ user@<your-vps>:/tmp/openclaw-config/
+**Prerequisites:**
+- A VPS running Ubuntu 24.04 (Hetzner CX22 ~$5/mo works well)
+- A domain pointing at the VPS IP
+- SSH key access: `ssh-copy-id user@<your-vps>`
+- A Telegram bot token from [@BotFather](https://t.me/BotFather)
+- An [Anthropic API key](https://console.anthropic.com)
 
-   # Then on the VPS (from inside the repo directory)
-   docker run --rm \
-     -v /tmp/openclaw-config:/src \
-     -v "$(basename $(pwd))_openclaw_data":/dest \
-     busybox sh -c 'cp -r /src/. /dest/ && chown -R 1000:1000 /dest'
-   ```
-5. `make up`
-6. Fix `/data` permissions (the OpenClaw container runs as UID 1000):
-   ```bash
-   docker run --rm -v "$(basename $(pwd))_openclaw_data":/data busybox chown -R 1000:1000 /data
-   ```
-   Run this from inside the repo directory. The volume name is `<repo-dir-name>_openclaw_data`.
-7. Fix the device platform pin — OpenClaw config created on macOS has a `darwin` platform binding that the Linux container rejects. Run this once after first deploy:
-   ```bash
-   docker compose exec openclaw node -e "
-   const fs = require('fs');
-   const p = '/home/node/.openclaw/devices/paired.json';
-   const d = JSON.parse(fs.readFileSync(p, 'utf8'));
-   for (const id of Object.keys(d)) {
-     if (d[id].clientId === 'cli') d[id].platform = 'linux';
-   }
-   fs.writeFileSync(p, JSON.stringify(d, null, 2));
-   fs.writeFileSync('/home/node/.openclaw/devices/pending.json', '{}');
-   console.log('done');
-   "
-   docker compose restart openclaw
-   ```
-   Without this fix the guardrail exits immediately and `openclaw logs` returns `pairing required`.
-8. Run through `docs/security-checklist.md`
+**Deploy:**
+
+```bash
+git clone https://github.com/eratchev/openclaw-deploy.git
+cd openclaw-deploy
+make deploy HOST=user@<your-vps>
+```
+
+The wizard provisions the VPS, configures everything interactively, and starts the stack. When it finishes, send a message to your bot.
+
+**Add WhatsApp (optional):**
+
+```bash
+make pair-whatsapp
+```
+
+Renders a QR code in your terminal. Scan with WhatsApp on your phone.
+
+**Check health:**
+
+```bash
+make doctor
+```
 
 ## Security Model
 
@@ -253,3 +246,15 @@ docker compose restart openclaw
 **Cause:** The `/data` volume is empty — OpenClaw config was not copied from your local machine before starting the stack.
 
 **Fix:** Stop the stack, copy your local `~/.openclaw` into the volume (see Quickstart step 4), then bring the stack back up.
+
+### Bootstrap fails with `config set` error on first start
+
+**Symptom:** `[entrypoint] ERROR: TELEGRAM_TOKEN is not set`
+
+**Cause:** `.env` is missing a required variable. The bootstrap runs before the gateway and fails fast.
+
+**Fix:** Verify `.env` has `TELEGRAM_TOKEN`, `DOMAIN`, and `ANTHROPIC_API_KEY` set, then restart:
+```bash
+make doctor  # shows which vars are missing
+sudo docker compose restart openclaw
+```
