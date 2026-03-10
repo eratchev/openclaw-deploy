@@ -114,4 +114,4 @@ doctor:
 # Pair WhatsApp interactively (renders QR code in your terminal)
 pair-whatsapp:
 	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
-	ssh -t "$(HOST)" "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -it openclaw openclaw channels login --channel web"
+	ssh -t "$(HOST)" "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -it openclaw openclaw channels login --channel whatsapp"
