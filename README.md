@@ -243,9 +243,13 @@ docker compose restart openclaw
 
 ### OpenClaw reports `Missing config`
 
-**Cause:** The `/data` volume is empty — OpenClaw config was not copied from your local machine before starting the stack.
+**Cause:** The `/data` volume is empty. On a fresh deploy this is handled automatically — the entrypoint bootstraps `openclaw.json` from `.env` on first start.
 
-**Fix:** Stop the stack, copy your local `~/.openclaw` into the volume (see Quickstart step 4), then bring the stack back up.
+**Fix:** If bootstrap did not run (e.g. the container started before `.env` was written), ensure `.env` has `TELEGRAM_TOKEN` and `DOMAIN` set, then restart:
+```bash
+make doctor  # confirms .env vars
+sudo docker compose restart openclaw
+```
 
 ### Bootstrap fails with `config set` error on first start
 
