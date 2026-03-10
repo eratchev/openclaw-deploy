@@ -45,7 +45,7 @@ check_optional() {
 check_service() {
     local name=$1 optional=${2:-false}
     local status
-    status=$(sudo docker compose ps --format '{{.Name}} {{.Status}}' 2>/dev/null | grep "^openclaw-deploy-${name}-" | awk '{print $2}' || echo "")
+    status=$(sudo docker compose ps --format '{{.Name}} {{.Status}}' 2>/dev/null | grep "^openclaw-deploy-${name}-" || echo "")
     if echo "$status" | grep -q "healthy"; then
         pass "$name  running (healthy)"
     elif echo "$status" | grep -q "Up"; then
