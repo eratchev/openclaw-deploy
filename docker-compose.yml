@@ -18,6 +18,12 @@ services:
       - caddy_config:/config
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2019/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - ingress
     depends_on:
@@ -64,6 +70,12 @@ services:
       - "60"
       - "1"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     volumes:
       - redis_data:/data
     networks:
