@@ -7,3 +7,5 @@ __pycache__/
 backups/
 docs/log-samples.jsonl
 .worktrees/
+.deploy
+.venv/

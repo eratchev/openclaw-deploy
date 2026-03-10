@@ -1,7 +1,10 @@
 PROJECT := $(notdir $(CURDIR))
 DATA_VOLUME := $(PROJECT)_openclaw_data
 
-.PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals deploy-workspace
+# Load HOST from .deploy file written by 'make deploy'
+-include .deploy
+
+.PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals deploy-workspace deploy doctor pair-whatsapp
 
 # Start base services (caddy, openclaw, redis)
 up:
@@ -95,3 +98,20 @@ kill-switch:
 	@echo "To resume: remove the file from the volume, then restart:"
 	@echo "  docker run --rm -v $(DATA_VOLUME):/data busybox rm -f /data/GUARDRAIL_DISABLE"
 	@echo "  make restart"
+
+# Deploy to a remote VPS from this local machine
+# Usage: make deploy HOST=user@x.x.x.x  (saved to .deploy for future targets)
+deploy:
+	@[ -n "$(HOST)" ] || (echo "Usage: make deploy HOST=user@x.x.x.x" && exit 1)
+	@echo "HOST=$(HOST)" > .deploy
+	@bash scripts/setup.sh "$(HOST)"
+
+# Run health checks on the VPS
+doctor:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	@ssh "$(HOST)" "cd ~/openclaw-deploy && bash scripts/doctor.sh"
+
+# Pair WhatsApp interactively (renders QR code in your terminal)
+pair-whatsapp:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	ssh -t "$(HOST)" "cd ~/openclaw-deploy && sudo docker compose exec -it openclaw openclaw configure --section whatsapp"
