@@ -146,3 +146,56 @@ BACKUP_S3_REGION=${BACKUP_S3_REGION}
 BACKUP_RETAIN_DAYS=${BACKUP_RETAIN_DAYS}
 EOF
 ok ".env written"
+
+# ── Step 5: Start the stack ───────────────────────────────────────────────────
+step "Starting services on VPS"
+
+COMPOSE_CMD="sudo docker compose"
+
+if [ -n "$OPENAI_API_KEY" ]; then
+    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD up -d --build voice-proxy && $COMPOSE_CMD up -d caddy"
+    ok "Started with voice transcription"
+else
+    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD up -d"
+    ok "Started base stack"
+fi
+
+# ── Step 6: Health wait ───────────────────────────────────────────────────────
+step "Waiting for services to become healthy (up to 60s)"
+
+deadline=$(($(date +%s) + 60))
+all_healthy=false
+while [ "$(date +%s)" -lt "$deadline" ]; do
+    status=$(rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD ps --format '{{.Name}} {{.Health}}' 2>/dev/null" || echo "")
+    unhealthy=$(echo "$status" | grep -v "healthy\|optional\|^$" | grep -c "starting\|unhealthy" || true)
+    if [ "$unhealthy" -eq 0 ]; then
+        all_healthy=true
+        break
+    fi
+    printf "."
+    sleep 3
+done
+echo ""
+
+if $all_healthy; then
+    ok "All services healthy"
+else
+    warn "Some services not yet healthy — run 'make doctor' to check"
+fi
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BOLD}  openclaw-deploy is running${NC}"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+echo -e "  ${GREEN}✅${NC} Telegram    @your_bot — send it a message"
+echo -e "  ${YELLOW}⚪${NC} WhatsApp    not paired — run: make pair-whatsapp"
+[ -z "$BACKUP_S3_BUCKET" ] && echo -e "  ${YELLOW}⚠️ ${NC} Backups     not configured — run: sudo bash scripts/install-backup-cron.sh"
+echo ""
+echo "  Health check:  make doctor"
+echo "  Logs:          make logs"
+echo "  Upgrade:       make update"
+echo ""
+echo -e "HOST=${HOST}" > .deploy
+ok "Saved HOST to .deploy — future make targets will use it automatically"
