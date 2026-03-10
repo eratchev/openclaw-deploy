@@ -59,7 +59,7 @@ step "Configuring .env on VPS"
 existing_env=$(rsh "cat '$REMOTE_DIR/.env' 2>/dev/null || echo ''" )
 
 get_existing() {
-    echo "$existing_env" | grep "^$1=" | cut -d= -f2- | tr -d '\r'
+    echo "$existing_env" | grep "^$1=" | cut -d= -f2- | tr -d '\r' || true
 }
 
 ask() {
@@ -71,7 +71,7 @@ ask() {
     elif [ -n "$default" ]; then
         hint=" [default: $default]"
     fi
-    printf "  %s%s: " "$prompt" "$hint"
+    printf "  %s%s: " "$prompt" "$hint" >&2
     read -r input
     # Use input if provided, else existing, else default
     echo "${input:-${existing:-$default}}"
@@ -82,8 +82,8 @@ ask_secret() {
     local existing; existing=$(get_existing "$var")
     local hint=""
     [ -n "$existing" ] && hint=" [current: set — press enter to keep]"
-    printf "  %s%s: " "$prompt" "$hint"
-    read -rs input; echo ""
+    printf "  %s%s: " "$prompt" "$hint" >&2
+    read -rs input; echo "" >&2
     echo "${input:-$existing}"
 }
 
@@ -106,13 +106,13 @@ fi
 
 echo ""
 echo "  Optional integrations:"
-printf "  Enable voice transcription (requires OpenAI key)? [y/N]: "; read -r voice_yn
+printf "  Enable voice transcription (requires OpenAI key)? [y/N]: " >&2; read -r voice_yn
 OPENAI_API_KEY=""
 if [[ "${voice_yn,,}" == "y" ]]; then
     OPENAI_API_KEY=$(ask_secret OPENAI_API_KEY "OpenAI API key")
 fi
 
-printf "  Configure Hetzner S3 backups? [y/N]: "; read -r backup_yn
+printf "  Configure Hetzner S3 backups? [y/N]: " >&2; read -r backup_yn
 BACKUP_S3_ENDPOINT=""; BACKUP_S3_BUCKET=""; BACKUP_S3_ACCESS_KEY=""; BACKUP_S3_SECRET_KEY=""; BACKUP_S3_REGION="hel1"; BACKUP_RETAIN_DAYS=7
 if [[ "${backup_yn,,}" == "y" ]]; then
     BACKUP_S3_ENDPOINT=$(ask BACKUP_S3_ENDPOINT "S3 endpoint" "https://hel1.your-objectstorage.com")
