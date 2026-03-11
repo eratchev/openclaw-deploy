@@ -27,6 +27,8 @@ import select
 import time
 import signal
 import subprocess
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -118,8 +120,10 @@ class Guardrail:
 
     # ── Abort ─────────────────────────────────────────────────────────────────
 
-    def kill_openclaw(self):
+    def kill_openclaw(self, reason: str = ""):
         """Kill the OpenClaw process. Drops ALL active sessions."""
+        if reason:
+            self._alert(f"🚨 OpenClaw guardrail killed gateway\nReason: {reason}")
         pid = self.openclaw_pid or self.find_openclaw_pid()
         if not pid:
             print("[guardrail] Cannot find OpenClaw PID — cannot abort", flush=True)
@@ -198,7 +202,7 @@ class Guardrail:
                 if violation:
                     print(f"[guardrail] VIOLATION session={sid}: {violation}", flush=True)
                     self.sessions.pop(sid, None)
-                    self.kill_openclaw()  # blocks event loop for up to 10s (SIGTERM wait)
+                    self.kill_openclaw(violation)  # blocks event loop for up to 10s (SIGTERM wait)
             return
 
         session_id = self.extract_session_id(message)
@@ -244,7 +248,7 @@ class Guardrail:
             if violation:
                 print(f"[guardrail] VIOLATION session={session_id}: {violation}", flush=True)
                 self.sessions.pop(session_id, None)
-                self.kill_openclaw()  # blocks event loop for up to 10s (SIGTERM wait)
+                self.kill_openclaw(violation)  # blocks event loop for up to 10s (SIGTERM wait)
             return
 
         if subsystem == SUBSYSTEM_AGENT and MSG_LLM_DONE in message:
@@ -299,7 +303,25 @@ class Guardrail:
         pct = (current / limit) * 100
         if pct > self.max_memory_pct:
             print(f"[guardrail] MEMORY THRESHOLD {pct:.1f}% > {self.max_memory_pct}% — terminating", flush=True)
-            self.kill_openclaw()  # blocks event loop for up to 10s (SIGTERM wait)
+            self.kill_openclaw(f"memory {pct:.1f}% > {self.max_memory_pct}%")  # blocks event loop for up to 10s (SIGTERM wait)
+
+    # ── Alerting ──────────────────────────────────────────────────────────────────
+
+    def _alert(self, message: str):
+        """Send a Telegram message to ALERT_TELEGRAM_CHAT_ID. Silent no-op if not configured."""
+        chat_id = os.getenv("ALERT_TELEGRAM_CHAT_ID", "")
+        token = os.getenv("TELEGRAM_TOKEN", "")
+        if not chat_id or not token:
+            return
+        try:
+            data = urllib.parse.urlencode({"chat_id": chat_id, "text": message}).encode()
+            req = urllib.request.Request(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                data=data,
+            )
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e:
+            print(f"[guardrail] WARNING: alert failed: {e}", flush=True)
 
     # ── Log subprocess lifecycle ───────────────────────────────────────────────
 

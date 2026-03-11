@@ -309,3 +309,68 @@ def test_restart_log_proc_force_kills_if_terminate_hangs():
         g._restart_log_proc_if_stale(old_proc, old_started)
 
     old_proc.kill.assert_called_once()
+
+
+# ── observability alerts ──────────────────────────────────────────────────────
+
+def test_alert_sends_telegram_when_configured():
+    """_alert() calls urlopen with a POST containing chat_id, text, and the bot token in the URL."""
+    g = Guardrail()
+    with patch.dict(os.environ, {"ALERT_TELEGRAM_CHAT_ID": "123456", "TELEGRAM_TOKEN": "tok:abc"}), \
+         patch("urllib.request.urlopen") as mock_urlopen:
+        g._alert("test message")
+    mock_urlopen.assert_called_once()
+    req = mock_urlopen.call_args[0][0]
+    assert req.get_method() == "POST"
+    assert b"chat_id=123456" in req.data
+    assert b"test+message" in req.data or b"test%20message" in req.data
+    assert "tok:abc" in req.full_url
+
+
+def test_alert_skips_when_chat_id_missing():
+    """_alert() is a no-op when ALERT_TELEGRAM_CHAT_ID is not set."""
+    g = Guardrail()
+    env = {k: v for k, v in os.environ.items() if k not in ("ALERT_TELEGRAM_CHAT_ID",)}
+    with patch.dict(os.environ, env, clear=True), \
+         patch("urllib.request.urlopen") as mock_urlopen:
+        g._alert("test message")
+    mock_urlopen.assert_not_called()
+
+
+def test_alert_skips_when_token_missing():
+    """_alert() is a no-op when TELEGRAM_TOKEN is not set."""
+    g = Guardrail()
+    env = {k: v for k, v in os.environ.items() if k not in ("TELEGRAM_TOKEN",)}
+    with patch.dict(os.environ, env, clear=True), \
+         patch("urllib.request.urlopen") as mock_urlopen:
+        g._alert("test message")
+    mock_urlopen.assert_not_called()
+
+
+def test_alert_does_not_raise_on_network_error():
+    """_alert() logs a warning and continues if the HTTP call fails."""
+    g = Guardrail()
+    with patch.dict(os.environ, {"ALERT_TELEGRAM_CHAT_ID": "123456", "TELEGRAM_TOKEN": "tok:abc"}), \
+         patch("urllib.request.urlopen", side_effect=Exception("network error")):
+        g._alert("test message")  # must not raise
+
+
+def test_kill_openclaw_alerts_with_reason():
+    """kill_openclaw(reason) sends an alert containing the reason string."""
+    g = Guardrail()
+    g.openclaw_pid = 99999
+    with patch("os.kill"), patch("time.sleep"), \
+         patch.object(g, "_alert") as mock_alert:
+        g.kill_openclaw("llm call limit (5 >= 5)")
+    mock_alert.assert_called_once()
+    assert "llm call limit" in mock_alert.call_args[0][0]
+
+
+def test_kill_openclaw_no_alert_without_reason():
+    """kill_openclaw() with no reason (kill-switch path) sends no alert."""
+    g = Guardrail()
+    g.openclaw_pid = 99999
+    with patch("os.kill"), patch("time.sleep"), \
+         patch.object(g, "_alert") as mock_alert:
+        g.kill_openclaw()
+    mock_alert.assert_not_called()
