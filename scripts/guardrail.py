@@ -88,6 +88,7 @@ class Guardrail:
         self.max_llm_calls = int(os.getenv("MAX_LLM_CALLS", "30"))
         self.max_idle_seconds = int(os.getenv("MAX_IDLE_SECONDS", "60"))
         self.max_memory_pct = float(os.getenv("MAX_MEMORY_PCT", "90"))
+        self.max_log_proc_seconds = int(os.getenv("MAX_LOG_PROC_SECONDS", "1800"))
 
     # ── PID detection ─────────────────────────────────────────────────────────
 
@@ -300,6 +301,39 @@ class Guardrail:
             print(f"[guardrail] MEMORY THRESHOLD {pct:.1f}% > {self.max_memory_pct}% — terminating", flush=True)
             self.kill_openclaw()  # blocks event loop for up to 10s (SIGTERM wait)
 
+    # ── Log subprocess lifecycle ───────────────────────────────────────────────
+
+    def _start_log_proc(self):
+        """Start the openclaw log-following subprocess. Returns (proc, started_at)."""
+        proc = subprocess.Popen(
+            ["openclaw", "logs", "--follow", "--json"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        return proc, time.time()
+
+    def _restart_log_proc_if_stale(self, proc, proc_started_at):
+        """If the log subprocess has exceeded max age, terminate it and start a fresh one.
+
+        Returns (proc, proc_started_at) — either the originals (if still fresh) or the
+        new ones after restart.
+        """
+        if time.time() - proc_started_at <= self.max_log_proc_seconds:
+            return proc, proc_started_at
+
+        print(
+            f"[guardrail] Restarting log subprocess (age > {self.max_log_proc_seconds}s)",
+            flush=True,
+        )
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        return self._start_log_proc()
+
     # ── Main loop ─────────────────────────────────────────────────────────────
 
     def run(self):
@@ -310,18 +344,14 @@ class Guardrail:
             f"llm={self.max_llm_calls} "
             f"tool_calls={self.max_tool_calls} "
             f"idle={self.max_idle_seconds}s "
-            f"memory={self.max_memory_pct}%",
+            f"memory={self.max_memory_pct}% "
+            f"log_proc_age={self.max_log_proc_seconds}s",
             flush=True,
         )
         self.openclaw_pid = self.find_openclaw_pid()
 
         try:
-            proc = subprocess.Popen(
-                ["openclaw", "logs", "--follow", "--json"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                text=True,
-            )
+            proc, proc_started_at = self._start_log_proc()
         except FileNotFoundError:
             print("[guardrail] ERROR: 'openclaw' not found on PATH — cannot start log monitor", flush=True)
             raise
@@ -337,6 +367,7 @@ class Guardrail:
                 self.openclaw_pid = self.find_openclaw_pid()
                 self.check_memory()
                 self.prune_sessions(now)
+                proc, proc_started_at = self._restart_log_proc_if_stale(proc, proc_started_at)
                 last_watchdog = now
 
             # Wait up to 5s for a log line so the watchdog runs on idle systems.
@@ -346,7 +377,10 @@ class Guardrail:
 
             line = proc.stdout.readline()
             if not line:
-                break  # EOF — subprocess exited
+                # EOF — subprocess exited (crash or periodic restart already in progress)
+                print("[guardrail] Log subprocess exited, restarting...", flush=True)
+                proc, proc_started_at = self._start_log_proc()
+                continue
 
             line = line.strip()
             if not line:

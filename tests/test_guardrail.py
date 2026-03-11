@@ -7,6 +7,7 @@ Session IDs are embedded in the message as sessionId=<value> (regex-extracted).
 Tool events use runId=<value> instead; the runId→sessionId mapping is built from LLM start events.
 Events are identified by subsystem + message content, not a type field.
 """
+import subprocess
 import time
 import pytest
 from unittest.mock import patch, MagicMock
@@ -255,3 +256,56 @@ def test_prune_keeps_active_sessions():
         g.process_event(make_session_register("active"))
         g.prune_sessions(time.time())
         assert "active" in g.sessions
+
+
+# ── log subprocess restart ────────────────────────────────────────────────────
+
+def test_restart_log_proc_if_stale_when_too_old():
+    """Subprocess older than max age is terminated and replaced with a fresh one."""
+    g = Guardrail()
+    g.max_log_proc_seconds = 10
+
+    old_proc = MagicMock()
+    new_proc = MagicMock()
+    new_proc.stdout = MagicMock()
+    old_started = time.time() - 100  # well past the 10s limit
+
+    with patch.object(g, '_start_log_proc', return_value=(new_proc, time.time())) as mock_start:
+        returned_proc, returned_started = g._restart_log_proc_if_stale(old_proc, old_started)
+
+    old_proc.terminate.assert_called_once()
+    mock_start.assert_called_once()
+    assert returned_proc is new_proc
+
+
+def test_restart_log_proc_if_stale_when_fresh():
+    """Subprocess within max age is left untouched."""
+    g = Guardrail()
+    g.max_log_proc_seconds = 1800
+
+    fresh_proc = MagicMock()
+    fresh_started = time.time()
+
+    with patch.object(g, '_start_log_proc') as mock_start:
+        returned_proc, returned_started = g._restart_log_proc_if_stale(fresh_proc, fresh_started)
+
+    mock_start.assert_not_called()
+    assert returned_proc is fresh_proc
+    assert returned_started == fresh_started
+
+
+def test_restart_log_proc_force_kills_if_terminate_hangs():
+    """If the old subprocess ignores SIGTERM, SIGKILL is sent."""
+    g = Guardrail()
+    g.max_log_proc_seconds = 1
+
+    old_proc = MagicMock()
+    old_proc.wait.side_effect = [subprocess.TimeoutExpired(cmd="openclaw", timeout=5), None]
+    new_proc = MagicMock()
+    new_proc.stdout = MagicMock()
+    old_started = time.time() - 100
+
+    with patch.object(g, '_start_log_proc', return_value=(new_proc, time.time())):
+        g._restart_log_proc_if_stale(old_proc, old_started)
+
+    old_proc.kill.assert_called_once()
