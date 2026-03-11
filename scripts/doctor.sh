@@ -73,6 +73,7 @@ check_required ANTHROPIC_API_KEY "ANTHROPIC_API_KEY"
 check_optional BACKUP_S3_BUCKET  "BACKUP_S3_BUCKET" "backups disabled"
 check_optional OPENAI_API_KEY    "OPENAI_API_KEY"   "voice transcription disabled"
 check_optional WEBHOOK_SECRET    "WEBHOOK_SECRET"   "voice webhook unauthenticated"
+check_optional ALERT_TELEGRAM_CHAT_ID "ALERT_TELEGRAM_CHAT_ID" "guardrail/backup alerts disabled  →  set to your Telegram chat ID (message @userinfobot to find it)"
 
 # ── Services ───────────────────────────────────────────────────────────────────
 
@@ -158,10 +159,31 @@ else
     warn "S3 credentials  not set — daily backups disabled"
 fi
 
-if sudo crontab -l 2>/dev/null | grep -q "backup-cron.sh"; then
+if sudo crontab -l 2>/dev/null | grep -q "openclaw-backup"; then
     pass "Cron  backup job installed"
 else
     warn "Cron  not installed  →  run: sudo bash scripts/install-backup-cron.sh"
+fi
+
+# ── System ─────────────────────────────────────────────────────────────────────
+
+echo ""
+echo " System"
+
+# Swap
+swap_total=$(free -m | awk '/^Swap:/ {print $2}')
+if [[ "${swap_total:-0}" -gt 0 ]]; then
+    pass "Swap  ${swap_total}MB configured"
+else
+    warn "Swap  none — add 2GB swapfile on 2GB hosts (see docs/runbook.md section 0)"
+fi
+
+# NODE_OPTIONS (V8 heap cap)
+node_opts=$(sudo docker compose exec -T openclaw printenv NODE_OPTIONS 2>/dev/null || true)
+if echo "$node_opts" | grep -q "max-old-space"; then
+    pass "NODE_OPTIONS  ${node_opts}"
+else
+    warn "NODE_OPTIONS  not set — V8 heap unbounded (OOM risk on 2GB hosts; set NODE_OPTIONS=--max-old-space-size=768 in .env)"
 fi
 
 # ── Summary ────────────────────────────────────────────────────────────────────
