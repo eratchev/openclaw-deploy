@@ -6,7 +6,9 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 
 .PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals deploy-workspace deploy doctor pair-whatsapp
 
-# Start base services (caddy, openclaw, redis)
+# Start base services (caddy, openclaw, redis).
+# If voice-proxy is already running (started via make up-voice), it stays running.
+# Use 'make down' to stop all services including voice-proxy.
 up:
 	docker compose up -d
 
