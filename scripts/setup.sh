@@ -104,6 +104,16 @@ else
     echo "  REDIS_PASSWORD  keeping existing"
 fi
 
+# Generate WEBHOOK_SECRET if not set
+existing_webhook_secret=$(get_existing WEBHOOK_SECRET)
+if [ -z "$existing_webhook_secret" ]; then
+    WEBHOOK_SECRET=$(openssl rand -hex 32)
+    echo "  WEBHOOK_SECRET  auto-generated"
+else
+    WEBHOOK_SECRET="$existing_webhook_secret"
+    echo "  WEBHOOK_SECRET  keeping existing"
+fi
+
 echo ""
 echo "  Optional integrations:"
 printf "  Enable voice transcription (requires OpenAI key)? [y/N]: " >&2; read -r voice_yn
@@ -132,6 +142,7 @@ DOMAIN=${DOMAIN}
 TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 REDIS_PASSWORD=${REDIS_PASSWORD}
+WEBHOOK_SECRET=${WEBHOOK_SECRET}
 OPENAI_API_KEY=${OPENAI_API_KEY}
 MAX_SESSION_SECONDS=300
 MAX_TOOL_CALLS=50
@@ -181,6 +192,17 @@ if $all_healthy; then
     ok "All services healthy"
 else
     warn "Some services not yet healthy — run 'make doctor' to check"
+fi
+
+# ── Step 7: Configure OpenClaw webhook secret ─────────────────────────────────
+step "Configuring OpenClaw webhook secret"
+
+if [ -n "$WEBHOOK_SECRET" ]; then
+    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD exec -T openclaw openclaw config set channels.telegram.webhookSecret '$WEBHOOK_SECRET'" 2>/dev/null || true
+    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD restart openclaw" 2>/dev/null || true
+    ok "Webhook secret configured (openclaw restarted to re-register webhook)"
+else
+    warn "WEBHOOK_SECRET not set — webhook is unauthenticated"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────

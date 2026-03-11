@@ -8,6 +8,7 @@ All non-voice traffic is forwarded unchanged.
 """
 import asyncio
 import copy
+import hmac
 import io
 import json
 import logging
@@ -32,6 +33,7 @@ VOICE_MAX_BYTES = float(os.environ.get("VOICE_MAX_FILE_SIZE_MB", "5")) * 1024 * 
 VOICE_RATE_LIMIT_PER_MIN = int(os.environ.get("VOICE_RATE_LIMIT_PER_MIN", "10"))
 WHISPER_TIMEOUT = 20.0
 FALLBACK_TEXT = "🎤 Voice message received but transcription failed."
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 
 TELEGRAM_API = "https://api.telegram.org"
 
@@ -157,6 +159,15 @@ async def forward_raw(
 
 async def handle_request(request: web.Request) -> web.Response:
     """Main handler: intercepts voice/audio, forwards everything else unchanged."""
+    # Validate Telegram webhook secret before any I/O.
+    # Telegram sends X-Telegram-Bot-Api-Secret-Token when the webhook is
+    # registered with a secret. Reject early to prevent abuse.
+    # hmac.compare_digest prevents timing attacks.
+    if WEBHOOK_SECRET:
+        token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if not hmac.compare_digest(token.encode(), WEBHOOK_SECRET.encode()):
+            return web.Response(status=403, text="forbidden")
+
     raw_body = await request.read()
     path = request.path_qs
     headers = dict(request.headers)

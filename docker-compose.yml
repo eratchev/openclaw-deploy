@@ -148,6 +148,7 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - VOICE_MAX_FILE_SIZE_MB=${VOICE_MAX_FILE_SIZE_MB:-5}
       - VOICE_RATE_LIMIT_PER_MIN=${VOICE_RATE_LIMIT_PER_MIN:-10}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
     cap_drop:
       - ALL
     read_only: true

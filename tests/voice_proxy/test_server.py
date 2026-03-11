@@ -169,3 +169,105 @@ async def test_openclaw_down_returns_200(fake_redis):
         async with TestClient(TestServer(app)) as client:
             resp = await client.post("/", data=raw_body, headers={"Content-Type": "application/json"})
             assert resp.status == 200
+
+
+async def test_valid_webhook_secret_accepted(fake_redis):
+    """Correct WEBHOOK_SECRET header must allow the request through."""
+    server = _server()
+    update = make_text_update("hello")
+    raw_body = json.dumps(update).encode()
+    forwarded = []
+
+    async def mock_forward(body, path, headers, upstream, session):
+        forwarded.append(json.loads(body))
+        return aiohttp.web.Response(status=200, body=b"ok")
+
+    with patch.object(server, "_redis", fake_redis), \
+         patch.object(server, "_session", AsyncMock()), \
+         patch.object(server, "WEBHOOK_SECRET", "test-secret-abc"), \
+         patch.object(server, "forward_raw", side_effect=mock_forward):
+        app = server.make_app()
+        app.on_startup.clear()
+        app.on_cleanup.clear()
+        async with TestClient(TestServer(app)) as client:
+            resp = await client.post(
+                "/",
+                data=raw_body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Telegram-Bot-Api-Secret-Token": "test-secret-abc",
+                },
+            )
+            assert resp.status == 200
+
+    assert len(forwarded) == 1
+
+
+async def test_missing_secret_header_returns_403(fake_redis):
+    """When WEBHOOK_SECRET is set, requests without the header must be rejected."""
+    server = _server()
+    update = make_text_update("hello")
+    raw_body = json.dumps(update).encode()
+
+    with patch.object(server, "_redis", fake_redis), \
+         patch.object(server, "_session", AsyncMock()), \
+         patch.object(server, "WEBHOOK_SECRET", "test-secret-abc"):
+        app = server.make_app()
+        app.on_startup.clear()
+        app.on_cleanup.clear()
+        async with TestClient(TestServer(app)) as client:
+            resp = await client.post(
+                "/", data=raw_body, headers={"Content-Type": "application/json"}
+            )
+            assert resp.status == 403
+
+
+async def test_wrong_secret_header_returns_403(fake_redis):
+    """Requests with an incorrect secret header must be rejected."""
+    server = _server()
+    update = make_text_update("hello")
+    raw_body = json.dumps(update).encode()
+
+    with patch.object(server, "_redis", fake_redis), \
+         patch.object(server, "_session", AsyncMock()), \
+         patch.object(server, "WEBHOOK_SECRET", "correct-secret"):
+        app = server.make_app()
+        app.on_startup.clear()
+        app.on_cleanup.clear()
+        async with TestClient(TestServer(app)) as client:
+            resp = await client.post(
+                "/",
+                data=raw_body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Telegram-Bot-Api-Secret-Token": "wrong-secret",
+                },
+            )
+            assert resp.status == 403
+
+
+async def test_empty_webhook_secret_skips_auth(fake_redis):
+    """When WEBHOOK_SECRET is empty, all requests are allowed (backward compat)."""
+    server = _server()
+    update = make_text_update("hello")
+    raw_body = json.dumps(update).encode()
+    forwarded = []
+
+    async def mock_forward(body, path, headers, upstream, session):
+        forwarded.append(body)
+        return aiohttp.web.Response(status=200, body=b"ok")
+
+    with patch.object(server, "_redis", fake_redis), \
+         patch.object(server, "_session", AsyncMock()), \
+         patch.object(server, "WEBHOOK_SECRET", ""), \
+         patch.object(server, "forward_raw", side_effect=mock_forward):
+        app = server.make_app()
+        app.on_startup.clear()
+        app.on_cleanup.clear()
+        async with TestClient(TestServer(app)) as client:
+            resp = await client.post(
+                "/", data=raw_body, headers={"Content-Type": "application/json"}
+            )
+            assert resp.status == 200
+
+    assert len(forwarded) == 1
