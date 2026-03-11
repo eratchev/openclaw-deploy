@@ -89,7 +89,10 @@ make up-voice          # builds voice-proxy, (re)starts caddy
 **Disable:**
 
 ```bash
-# SSH into VPS, then:
+# SSH into VPS first:
+ssh $(cat .deploy | cut -d= -f2)
+
+# Then on the VPS:
 docker compose stop voice-proxy && docker compose rm -f voice-proxy
 ```
 
@@ -107,11 +110,17 @@ make kill-switch
 
 This touches `/home/node/.openclaw/GUARDRAIL_DISABLE` inside the container. The guardrail detects the file and kills OpenClaw. Docker restarts the container, guardrail sees the file again, kills it again — holding the service down until the file is removed.
 
-**Recovery:**
+**Recovery (run on the VPS):**
 
 ```bash
-# Remove the kill-switch file from the volume:
-docker run --rm -v openclaw-deploy_openclaw_data:/data busybox rm -f /data/GUARDRAIL_DISABLE
+# The volume name is derived from the repo directory name.
+# Find it first:
+docker volume ls | grep openclaw_data
+
+# Remove the kill-switch file (substitute your actual volume name if different):
+VOLUME=$(docker volume ls -q | grep openclaw_data)
+docker run --rm -v "$VOLUME":/data busybox rm -f /data/GUARDRAIL_DISABLE
+
 # Restart OpenClaw:
 make restart
 ```
@@ -122,26 +131,36 @@ make restart
 
 ## 7. Rollback to a Previous Image
 
+**On your VPS** (`ssh $(cat .deploy | cut -d= -f2)`):
+
 ```bash
-# On VPS — list available images with digests:
+# On VPS: list available images with digests:
 docker image ls ghcr.io/openclaw/openclaw --digests
 ```
 
-Pin the desired digest in `docker-compose.yml`:
+**Locally:** pin the desired digest in `docker-compose.yml`:
 
 ```yaml
-# services.openclaw.image — replace :latest with the digest
+# Locally: services.openclaw.image — replace :latest with the digest
 image: ghcr.io/openclaw/openclaw@sha256:<digest>
 ```
 
-Apply without touching other services:
+**Locally:** deploy the pinned image:
 
 ```bash
+# Locally: push the change and redeploy
+make deploy
+```
+
+Or, **on your VPS** if editing directly:
+
+```bash
+# On VPS: apply without touching other services
 docker compose up -d --no-deps openclaw
 make doctor
 ```
 
-To return to latest: revert the image line to `:latest` and run `make update`.
+To return to latest: revert the image line to `:latest` and run `make update` (locally).
 
 ---
 
@@ -149,24 +168,29 @@ To return to latest: revert the image line to `:latest` and run `make update`.
 
 Backups are `.tar.gz` archives of the `openclaw-deploy_openclaw_data` volume created by `make backup` (local) or `make backup-remote` (S3).
 
+**Run these commands on the VPS:** `ssh user@YOUR_VPS_IP`
+
 ```bash
-# 1. Stop OpenClaw to avoid data corruption:
+# On VPS: 1. Stop OpenClaw to avoid data corruption:
 docker compose stop openclaw
 
-# 2. Restore the archive into the volume:
+# On VPS: 2. Find your volume name (depends on repo directory name):
+VOLUME=$(docker volume ls -q | grep openclaw_data)
+
+# On VPS: 3. Restore the archive into the volume:
 docker run --rm \
-  -v openclaw-deploy_openclaw_data:/data \
+  -v "$VOLUME":/data \
   -v /path/to/backup:/backup:ro \
   busybox tar xzf /backup/openclaw-data-YYYYMMDD-HHMMSS.tar.gz -C /data
 
-# 3. Start OpenClaw:
+# On VPS: 4. Start OpenClaw:
 docker compose up -d --no-deps openclaw
 
-# 4. Verify:
-make doctor
+# On VPS: 5. Verify (or run `make doctor` locally):
+docker compose ps
 ```
 
-For S3 backups: download the archive with `aws s3 cp s3://<bucket>/<key> /tmp/restore.tar.gz` before step 2.
+For S3 backups: download the archive on the VPS with `aws s3 cp s3://<bucket>/<key> /tmp/restore.tar.gz` before step 3.
 
 ---
 
