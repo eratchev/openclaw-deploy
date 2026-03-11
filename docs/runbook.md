@@ -16,7 +16,7 @@ The script will:
 1. Install Docker on the VPS if missing.
 2. Clone the repo to `~/openclaw-deploy` on the VPS.
 3. Prompt for required values: `DOMAIN`, `TELEGRAM_TOKEN`, `ANTHROPIC_API_KEY`.
-4. Auto-generate `REDIS_PASSWORD` (random 32-byte hex).
+4. Auto-generate `REDIS_PASSWORD` and `WEBHOOK_SECRET` (random 32-byte hex each).
 5. Optionally prompt for `OPENAI_API_KEY` (voice transcription) and S3 backup credentials.
 6. Write `.env` to the VPS and start the stack.
 7. Wait up to 60 s for services to become healthy.
