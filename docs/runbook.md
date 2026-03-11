@@ -18,11 +18,11 @@ The OpenClaw gateway is a Node.js process. On a 2 GB host it is safe, but **only
 
 ### Node.js heap cap
 
-`docker-compose.yml` passes `NODE_OPTIONS=--max-old-space-size=512` to the openclaw container by default, capping V8 heap at 512 MB. This is the right value for a 2 GB host. On a 4 GB host you can raise it in `.env`:
+`docker-compose.yml` passes `NODE_OPTIONS=--max-old-space-size=768` to the openclaw container by default, capping V8 heap at 768 MB. The gateway requires ~509 MB of heap at startup; 768 MB gives enough headroom for GC. On a 4 GB host you can raise it in `.env`:
 
 ```bash
 # .env on VPS (optional override)
-NODE_OPTIONS=--max-old-space-size=1024
+NODE_OPTIONS=--max-old-space-size=1536
 ```
 
 ### Add swap on a 2 GB VPS (one-time setup)
@@ -266,7 +266,7 @@ Key processes and normal RSS on a 2 GB host:
 
 | Process | Normal RSS | Alarm if > |
 |---------|-----------|------------|
-| `openclaw-gatewa` | 400–500 MB | 700 MB |
+| `openclaw-gatewa` | 500–700 MB | 1000 MB |
 | `openclaw-logs` | 50–300 MB | 500 MB |
 | `python` (guardrail) | 40–70 MB | 150 MB |
 
