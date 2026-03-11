@@ -198,9 +198,12 @@ fi
 step "Configuring OpenClaw webhook secret"
 
 if [ -n "$WEBHOOK_SECRET" ]; then
-    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD exec -T openclaw openclaw config set channels.telegram.webhookSecret '$WEBHOOK_SECRET'" 2>/dev/null || true
-    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD restart openclaw" 2>/dev/null || true
-    ok "Webhook secret configured (openclaw restarted to re-register webhook)"
+    if rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD exec -T openclaw openclaw config set channels.telegram.webhookSecret '$WEBHOOK_SECRET'" 2>/dev/null; then
+        rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD restart openclaw" 2>/dev/null || true
+        ok "Webhook secret configured (openclaw restarted to re-register webhook)"
+    else
+        warn "Could not set webhook secret — run manually: docker compose exec openclaw openclaw config set channels.telegram.webhookSecret <secret>"
+    fi
 else
     warn "WEBHOOK_SECRET not set — webhook is unauthenticated"
 fi
