@@ -133,6 +133,7 @@ services:
 
   voice-proxy:
     build: ./services/voice-proxy
+    profiles: [voice]
     restart: unless-stopped
     networks:
       - ingress

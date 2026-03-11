@@ -16,8 +16,7 @@ up-calendar:
 
 # Start base services + voice transcription proxy
 up-voice:
-	docker compose up -d --build voice-proxy
-	docker compose up -d caddy
+	docker compose --profile voice up -d --build
 	@echo "Voice proxy started. Test by sending a voice note to your bot."
 
 # Stop all services

@@ -153,7 +153,7 @@ step "Starting services on VPS"
 COMPOSE_CMD="sudo docker compose"
 
 if [ -n "$OPENAI_API_KEY" ]; then
-    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD up -d --build voice-proxy && $COMPOSE_CMD up -d caddy"
+    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD --profile voice up -d --build"
     ok "Started with voice transcription"
 else
     rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD up -d"
