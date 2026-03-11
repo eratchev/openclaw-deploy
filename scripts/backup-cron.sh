@@ -12,17 +12,25 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-# Load .env (export all vars)
-set -a
-# shellcheck source=/dev/null
-source "$ENV_FILE"
-set +a
+# Safe .env parser — reads one variable at a time using grep/cut.
+# Unlike 'source', this never executes .env content as shell code.
+parse_env() {
+  local var=$1
+  grep "^${var}=" "$ENV_FILE" | head -1 | cut -d= -f2-
+}
+
+BACKUP_S3_BUCKET="$(parse_env BACKUP_S3_BUCKET)"
+BACKUP_S3_ENDPOINT="$(parse_env BACKUP_S3_ENDPOINT)"
+BACKUP_S3_ACCESS_KEY="$(parse_env BACKUP_S3_ACCESS_KEY)"
+BACKUP_S3_SECRET_KEY="$(parse_env BACKUP_S3_SECRET_KEY)"
+BACKUP_S3_REGION="$(parse_env BACKUP_S3_REGION)"
+BACKUP_RETAIN_DAYS="$(parse_env BACKUP_RETAIN_DAYS)"
+BACKUP_RETAIN_DAYS="${BACKUP_RETAIN_DAYS:-7}"
 
 : "${BACKUP_S3_BUCKET:?BACKUP_S3_BUCKET not set in .env}"
 : "${BACKUP_S3_ENDPOINT:?BACKUP_S3_ENDPOINT not set in .env}"
 : "${BACKUP_S3_ACCESS_KEY:?BACKUP_S3_ACCESS_KEY not set in .env}"
 : "${BACKUP_S3_SECRET_KEY:?BACKUP_S3_SECRET_KEY not set in .env}"
-BACKUP_RETAIN_DAYS="${BACKUP_RETAIN_DAYS:-7}"
 
 VOLUME="$(basename "$REPO")_openclaw_data"
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
