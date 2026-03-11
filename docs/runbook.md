@@ -337,3 +337,140 @@ High-level steps:
 6. Configure exec approvals (once): `make setup-approvals`
 
 `make doctor` reports `calendar-proxy` status (optional — skip if not started).
+
+---
+
+## 11. Secret Rotation
+
+Rotate secrets one at a time to avoid simultaneous downtime.
+
+### ANTHROPIC_API_KEY
+
+1. Generate a new key at console.anthropic.com.
+2. Update `.env` on the VPS: edit `.env` → replace `ANTHROPIC_API_KEY=...`
+3. `docker compose up -d --no-deps openclaw` — picks up the new key on restart.
+4. Revoke the old key at console.anthropic.com.
+5. `make doctor` to confirm healthy.
+
+### TELEGRAM_TOKEN
+
+Telegram tokens cannot be rotated without a full re-registration:
+
+1. Message @BotFather → `/mybots` → select bot → `API Token` → `Revoke current token`.
+2. BotFather issues a new token.
+3. Update `.env` on the VPS: replace `TELEGRAM_TOKEN=...`
+4. Re-register the webhook with the new token:
+   ```bash
+   docker compose exec openclaw openclaw config set channels.telegram.botToken "<new token>"
+   docker compose exec openclaw openclaw config set channels.telegram.webhookUrl "https://${DOMAIN}/telegram-webhook"
+   docker compose restart openclaw
+   ```
+5. `make doctor` — confirm Telegram webhook shows ✅.
+
+### REDIS_PASSWORD
+
+Changing the Redis password requires a coordinated restart of both redis and openclaw:
+
+```bash
+# On VPS:
+NEW_PASS=$(openssl rand -hex 32)
+
+# 1. Update .env
+sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=${NEW_PASS}/" .env
+
+# 2. Restart everything together (redis must start with new password,
+#    openclaw must authenticate with it simultaneously)
+docker compose down && docker compose up -d
+
+make doctor
+```
+
+### WEBHOOK_SECRET
+
+```bash
+# On VPS:
+NEW_SECRET=$(openssl rand -hex 32)
+
+# 1. Update .env
+sed -i "s/^WEBHOOK_SECRET=.*/WEBHOOK_SECRET=${NEW_SECRET}/" .env
+
+# 2. Update openclaw config so Telegram registers the new secret
+docker compose exec openclaw openclaw config set channels.telegram.webhookSecret "$NEW_SECRET"
+
+# 3. Restart affected services
+docker compose up -d --no-deps voice-proxy
+docker compose restart openclaw
+
+make doctor
+```
+
+### OPENAI_API_KEY
+
+```bash
+# On VPS: update .env, restart voice-proxy
+sed -i "s/^OPENAI_API_KEY=.*/OPENAI_API_KEY=<new key>/" .env
+docker compose up -d --no-deps voice-proxy
+```
+
+Revoke the old key at platform.openai.com.
+
+---
+
+## 12. Compromise Response
+
+If you suspect the bot or VPS has been compromised:
+
+### Step 1 — Contain immediately
+
+```bash
+make kill-switch    # stops the bot within 5 seconds
+```
+
+### Step 2 — Revoke all credentials at source
+
+Do this before rotating `.env` — invalidate at the provider so the leaked key cannot be used even if not yet rotated locally:
+
+| Credential | Where to revoke |
+|---|---|
+| `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys |
+| `TELEGRAM_TOKEN` | @BotFather → `/mybots` → Revoke |
+| `OPENAI_API_KEY` | platform.openai.com → API Keys |
+| S3 access key | Hetzner Console → Object Storage → Access Keys |
+
+### Step 3 — Assess scope
+
+```bash
+# Check for unexpected SSH logins
+sudo last | head -20
+
+# Check for unexpected processes
+sudo ps aux | grep -v "docker\|containerd\|openclaw\|redis\|caddy\|sshd\|systemd\|root"
+
+# Check Docker for unexpected containers or images
+docker ps -a
+docker images
+```
+
+### Step 4 — Wipe and redeploy (if server is compromised)
+
+If the VPS itself may be compromised (not just a leaked API key):
+
+1. Snapshot the data volume first:
+   ```bash
+   make backup-remote
+   ```
+2. Destroy and rebuild the VPS from scratch at Hetzner Console.
+3. Run `make deploy HOST=user@new-vps-ip` from your local machine.
+4. Restore data from backup (see Section 8).
+5. Set all new credentials in `.env`.
+
+### Step 5 — Post-incident
+
+- Rotate all secrets (see Section 11).
+- Remove the kill switch:
+  ```bash
+  VOLUME=$(docker volume ls -q | grep openclaw_data)
+  docker run --rm -v "$VOLUME":/data busybox rm -f /data/GUARDRAIL_DISABLE
+  make restart
+  ```
+- `make doctor`
