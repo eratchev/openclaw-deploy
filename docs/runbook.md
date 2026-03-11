@@ -4,6 +4,41 @@ Practical reference for deploying, operating, and recovering the openclaw-deploy
 
 ---
 
+## 0. VPS Requirements
+
+### Minimum spec
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| RAM      | 2 GB    | 4 GB        |
+| Disk     | 20 GB   | 40 GB       |
+| Swap     | **2 GB** (required on 2 GB hosts) | 4 GB |
+
+The OpenClaw gateway is a Node.js process. On a 2 GB host it is safe, but **only if swap is configured** — without swap, a transient allocation spike will trigger a kernel OOM death spiral.
+
+### Node.js heap cap
+
+`docker-compose.yml` passes `NODE_OPTIONS=--max-old-space-size=512` to the openclaw container by default, capping V8 heap at 512 MB. This is the right value for a 2 GB host. On a 4 GB host you can raise it in `.env`:
+
+```bash
+# .env on VPS (optional override)
+NODE_OPTIONS=--max-old-space-size=1024
+```
+
+### Add swap on a 2 GB VPS (one-time setup)
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+Verify: `free -h` — Swap line should show 2.0 GB total.
+
+---
+
 ## 1. First-Time Deploy
 
 Run from your local machine (requires SSH key access to the VPS):
@@ -195,6 +230,53 @@ For S3 backups: download the archive on the VPS with `aws s3 cp s3://<bucket>/<k
 ---
 
 ## 9. Troubleshooting
+
+### OOM / memory death spiral (kswapd at 100%, all processes in D state)
+
+**Symptoms:** `top` shows `kswapd0` at 100% CPU, most processes in `D` (uninterruptible sleep) state, `docker compose down` hangs.
+
+**Cause:** The VPS ran out of RAM and has no swap, or the Node.js gateway exceeded `--max-old-space-size` and triggered a restart loop where each startup attempt allocates more RAM than is available.
+
+**Recovery:**
+
+```bash
+# 1. Force-stop the stuck containers
+docker kill $(docker ps -q)
+# If that hangs too:
+sudo systemctl stop docker && sudo systemctl start docker
+
+# 2. Add swap if missing (see section 0)
+free -h    # confirm Swap row is non-zero before continuing
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile \
+  && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# 3. Pull latest config and restart
+git pull && docker compose up -d
+```
+
+**Diagnosis — identify the leaking process:**
+
+```bash
+# Sort by RSS descending
+ps aux --sort=-%mem | head -10
+```
+
+Key processes and normal RSS on a 2 GB host:
+
+| Process | Normal RSS | Alarm if > |
+|---------|-----------|------------|
+| `openclaw-gatewa` | 400–500 MB | 700 MB |
+| `openclaw-logs` | 50–300 MB | 500 MB |
+| `python` (guardrail) | 40–70 MB | 150 MB |
+
+`openclaw-logs` (`openclaw logs --follow --json`) has a known memory leak. The guardrail automatically restarts it every 30 minutes (`MAX_LOG_PROC_SECONDS=1800`). To restart it immediately:
+
+```bash
+# On VPS: find and kill the log subprocess — guardrail restarts it within 5s
+pgrep -a node | grep 'openclaw logs'   # get PID
+kill <pid>
+```
 
 ### CPU spike above 100%
 
