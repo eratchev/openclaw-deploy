@@ -72,6 +72,7 @@ check_required REDIS_PASSWORD    "REDIS_PASSWORD"
 check_required ANTHROPIC_API_KEY "ANTHROPIC_API_KEY"
 check_optional BACKUP_S3_BUCKET  "BACKUP_S3_BUCKET" "backups disabled"
 check_optional OPENAI_API_KEY    "OPENAI_API_KEY"   "voice transcription disabled"
+check_optional WEBHOOK_SECRET    "WEBHOOK_SECRET"   "voice webhook unauthenticated"
 
 # ── Services ───────────────────────────────────────────────────────────────────
 
@@ -133,6 +134,17 @@ if echo "$whatsapp_state" | grep -q "true"; then
     pass "WhatsApp  enabled"
 else
     skip "WhatsApp  not paired  →  run: make pair-whatsapp"
+fi
+
+# ── Google Calendar ────────────────────────────────────────────────────────────
+
+echo ""
+echo " Google Calendar"
+
+if sudo docker compose exec -T openclaw test -f /home/node/.openclaw/gcal_token.enc 2>/dev/null; then
+    pass "gcal_token.enc  present"
+else
+    skip "gcal_token.enc  not configured  →  see docs/plans/2026-03-03-google-calendar.md"
 fi
 
 # ── Backups ────────────────────────────────────────────────────────────────────
