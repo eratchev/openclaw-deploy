@@ -42,11 +42,13 @@ services:
       - ./scripts/guardrail.py:/home/node/guardrail.py:ro
     env_file:
       - .env
+    environment:
+      - NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=512}
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
-    mem_limit: 2g
+    mem_limit: 1400m
     cpus: 1.5
     pids_limit: 256
     restart: unless-stopped
