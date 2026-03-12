@@ -191,7 +191,7 @@ fi
 echo ""
 echo " Inbound"
 
-input_policy=$(sudo iptables -L INPUT -n 2>/dev/null | awk 'NR==1{print $NF}')
+input_policy=$(sudo iptables -L INPUT -n 2>/dev/null | awk 'NR==1{gsub(/[()]/, "", $NF); print $NF}')
 if [ "${input_policy:-}" = "DROP" ]; then
     input_rules=$(sudo iptables -L INPUT -n 2>/dev/null)
     if echo "$input_rules" | grep -q "dpt:22" && echo "$input_rules" | grep -q "dpt:443"; then
