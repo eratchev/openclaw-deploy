@@ -142,12 +142,10 @@ BACKUP_S3_SECRET_KEY=$(get_existing BACKUP_S3_SECRET_KEY)
 BACKUP_S3_REGION=$(get_existing BACKUP_S3_REGION); BACKUP_S3_REGION=${BACKUP_S3_REGION:-hel1}
 BACKUP_RETAIN_DAYS=$(get_existing BACKUP_RETAIN_DAYS); BACKUP_RETAIN_DAYS=${BACKUP_RETAIN_DAYS:-7}
 ALERT_TELEGRAM_CHAT_ID=$(get_existing ALERT_TELEGRAM_CHAT_ID)
-GCAL_CREATED_BY=$(get_existing GCAL_CREATED_BY)
 
 [ -n "$OPENAI_API_KEY" ]          && _voice_hint=" [currently enabled]"   || _voice_hint=""
 [ -n "$BACKUP_S3_BUCKET" ]        && _backup_hint=" [currently: $BACKUP_S3_BUCKET]" || _backup_hint=""
 [ -n "$ALERT_TELEGRAM_CHAT_ID" ]  && _alerts_hint=" [currently: chat $ALERT_TELEGRAM_CHAT_ID]" || _alerts_hint=""
-[ -n "$GCAL_CREATED_BY" ]         && _gcal_tag_hint=" [currently: $GCAL_CREATED_BY]" || _gcal_tag_hint=""
 
 printf "  Enable voice transcription (requires OpenAI key)?%s [y/N]: " "$_voice_hint" >&2; read -r voice_yn
 if [[ "${voice_yn,,}" == "y" ]]; then
@@ -170,7 +168,6 @@ if [[ "${alerts_yn,,}" == "y" ]]; then
     ALERT_TELEGRAM_CHAT_ID=$(ask ALERT_TELEGRAM_CHAT_ID "Your Telegram chat ID")
 fi
 
-GCAL_CREATED_BY=$(ask GCAL_CREATED_BY "Calendar event attribution tag (e.g. 'Created by @YourBot')" "$GCAL_CREATED_BY")
 
 # Validate required vars — fail before writing if any are empty
 if [ -z "$DOMAIN" ] || [ -z "$TELEGRAM_TOKEN" ] || [ -z "$ANTHROPIC_API_KEY" ]; then
@@ -204,7 +201,6 @@ BACKUP_S3_SECRET_KEY=${BACKUP_S3_SECRET_KEY}
 BACKUP_S3_REGION=${BACKUP_S3_REGION}
 BACKUP_RETAIN_DAYS=${BACKUP_RETAIN_DAYS}
 ALERT_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID}
-GCAL_CREATED_BY="${GCAL_CREATED_BY}"
 EOF
 ok ".env written"
 

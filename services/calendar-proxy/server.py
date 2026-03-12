@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 import time
@@ -156,6 +157,17 @@ def _run_write_pipeline(event_input, op: str, is_delete: bool = False):
 
 # ── Tool handlers (called by tests and MCP tools) ─────────────────────────────
 
+def _created_by_tag() -> str:
+    """Return e.g. 'Created by Quill on Mar 12, 2026'."""
+    try:
+        config = json.loads(Path("/data/openclaw.json").read_text())
+        name = config.get("agents", {}).get("main", {}).get("name", "OpenClaw")
+    except Exception:
+        name = "OpenClaw"
+    date = datetime.now().strftime("%-d %b %Y")  # "12 Mar 2026" on Linux
+    return f"Created by {name} on {date}"
+
+
 def handle_create_event(args: dict) -> dict:
     event_input = CreateEventInput(**args)
     result = _run_write_pipeline(event_input, op="create")
@@ -165,12 +177,10 @@ def handle_create_event(args: dict) -> dict:
     service = build_google_service()
     body = {"summary": event_input.title, "start": {"dateTime": event_input.start},
             "end": {"dateTime": event_input.end}}
-    created_by = os.environ.get("GCAL_CREATED_BY", "")
-    if event_input.description and created_by:
+    created_by = _created_by_tag()
+    if event_input.description:
         body["description"] = f"{event_input.description}\n\n{created_by}"
-    elif event_input.description:
-        body["description"] = event_input.description
-    elif created_by:
+    else:
         body["description"] = created_by
     if event_input.recurrence:
         body["recurrence"] = [f"RRULE:{event_input.recurrence.rrule}"]
