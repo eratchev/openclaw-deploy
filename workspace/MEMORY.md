@@ -85,7 +85,7 @@ gcal delete --event-id EVENT_ID --mode execute --confirmed
 gcal avail --from "2026-03-04T09:00:00-08:00" --to "2026-03-04T18:00:00-08:00" --minutes 60
 ```
 
-**Timezone:** Set your timezone in USER.md. Use ISO 8601 offsets in all gcal commands.
+**Timezone:** Pacific Time (America/Los_Angeles). Use ISO 8601 offsets in all gcal commands.
 
 **CRITICAL: Never use bash or shell commands.** Bash is disabled — calling it will fail.
 - For gcal: use exec with `{"command": "gcal ...", "workdir": "/home/node/.openclaw/workspace"}`

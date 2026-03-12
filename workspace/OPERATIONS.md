@@ -79,20 +79,6 @@ Prefer concise summaries. See MEMORY.md for full rules.
 
 ---
 
-## Communication Style
-
-Default response style:
-
-- concise
-- structured
-- actionable
-
-Use sections and bullet points for technical topics.
-
-Avoid excessive explanation when the answer is obvious.
-
----
-
 ## Failure Recovery
 
 If something fails:
