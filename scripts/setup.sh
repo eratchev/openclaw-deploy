@@ -214,7 +214,7 @@ ok "Started stack"
 # ── Step 6: Health wait ───────────────────────────────────────────────────────
 step "Waiting for services to become healthy (up to 60s)"
 
-deadline=$(($(date +%s) + 60))
+deadline=$(($(date +%s) + 90))
 all_healthy=false
 while [ "$(date +%s)" -lt "$deadline" ]; do
     status=$(rsh "cd $REMOTE_DIR && $COMPOSE_CMD ps --format '{{.Name}} {{.Health}}' 2>/dev/null" || echo "")
@@ -288,10 +288,11 @@ if $whatsapp_paired; then
 else
     echo -e "  ${YELLOW}⚪${NC} WhatsApp    not paired — run: make pair-whatsapp"
 fi
-if $backup_cron_ok; then
+cron_installed=$(rsh "sudo crontab -l 2>/dev/null | grep -c openclaw-backup || true")
+if $backup_cron_ok || [ "${cron_installed:-0}" -gt 0 ]; then
     echo -e "  ${GREEN}✅${NC} Backups     cron active (daily 03:00 UTC)"
 elif [ -n "$BACKUP_S3_BUCKET" ]; then
-    echo -e "  ${YELLOW}⚠️ ${NC} Backups     S3 configured but cron failed — run on VPS: sudo bash scripts/install-backup-cron.sh"
+    echo -e "  ${YELLOW}⚠️ ${NC} Backups     S3 configured but cron not installed — run on VPS: sudo bash scripts/install-backup-cron.sh"
 else
     echo -e "  ${YELLOW}⚪${NC} Backups     not configured (re-run make deploy to add S3 credentials)"
 fi
