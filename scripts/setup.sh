@@ -34,6 +34,14 @@ rsh "command -v docker > /dev/null 2>&1" || {
 }
 ok "Docker available"
 
+# ── Step 2b: Apply container egress allowlist ─────────────────────────────────
+step "Applying container egress allowlist"
+if scp scripts/egress.sh "$HOST:/tmp/egress.sh" && rsh "sudo bash /tmp/egress.sh"; then
+    ok "Egress allowlist active (HTTPS/DNS/NTP only)"
+else
+    warn "Egress setup failed — run: make setup-egress"
+fi
+
 rsh "command -v git > /dev/null 2>&1" || rsh "sudo apt-get install -y git > /dev/null 2>&1"
 ok "git available"
 

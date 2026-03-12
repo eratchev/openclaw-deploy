@@ -43,17 +43,18 @@ ufw allow 80/tcp comment "HTTP ACME challenge"
 ufw --force enable
 echo "[provision] UFW inbound rules applied."
 
-# ── Optional outbound allowlist (DISABLED by default) ────────────────────────
-# Uncomment and customize to restrict outbound traffic after verifying
-# that all required API endpoints are listed.
-#
-# ufw default deny outgoing
-# ufw allow out 53/udp   comment "DNS"
-# ufw allow out 123/udp  comment "NTP"
-# ufw allow out to any port 443 comment "HTTPS outbound"
-# # Add specific IPs for Telegram, Anthropic, OpenAI, WhatsApp as needed
-# ufw reload
-echo "[provision] Outbound egress: unrestricted (Phase 1). See docs/threat-model.md."
+# ── Container egress allowlist ────────────────────────────────────────────────
+# Restricts Docker container outbound to HTTPS(443), DNS(53), NTP(123).
+# Requires Docker daemon to be running (DOCKER-USER chain must exist).
+if command -v docker &>/dev/null; then
+  # Explicitly start daemon — the Docker installer leaves the binary available
+  # but the daemon may not have started yet, and DOCKER-USER only exists once
+  # the daemon is running.
+  systemctl start docker
+  bash "$(dirname "$0")/egress.sh"
+else
+  echo "[provision] Skipping egress rules — Docker not installed. Run: sudo bash scripts/egress.sh"
+fi
 
 # ── Fail2ban ──────────────────────────────────────────────────────────────────
 systemctl enable --now fail2ban
