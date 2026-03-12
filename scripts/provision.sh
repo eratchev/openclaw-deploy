@@ -37,21 +37,12 @@ systemctl reload ssh
 # ── Inbound firewall rules ────────────────────────────────────────────────────
 # Use iptables directly. UFW is not used because iptables-persistent (installed
 # by egress.sh below) conflicts with UFW on Ubuntu 24.04 and removes it.
-# Rules are persisted by the netfilter-persistent save call in egress.sh.
-
 # Remove UFW if pre-installed (Ubuntu ships it by default).
 if dpkg -l ufw 2>/dev/null | grep -q '^ii'; then
   apt-get remove -y --purge ufw
 fi
-
-iptables -F INPUT 2>/dev/null || true
-iptables -A INPUT -i lo -j ACCEPT
-iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A INPUT -p tcp --dport 22  -j ACCEPT
-iptables -A INPUT -p tcp --dport 80  -j ACCEPT
-iptables -A INPUT -p tcp --dport 443 -j ACCEPT
-iptables -P INPUT DROP
-echo "[provision] Inbound firewall: SSH(22), HTTP(80), HTTPS(443) — all else blocked."
+# inbound.sh applies rules; egress.sh (called after Docker install) persists all rules.
+bash "$(dirname "$0")/inbound.sh"
 
 # ── Fail2ban ──────────────────────────────────────────────────────────────────
 systemctl enable --now fail2ban

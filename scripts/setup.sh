@@ -34,7 +34,15 @@ rsh "command -v docker > /dev/null 2>&1" || {
 }
 ok "Docker available"
 
-# ── Step 2b: Apply container egress allowlist ─────────────────────────────────
+# ── Step 2b: Apply inbound firewall rules ─────────────────────────────────────
+step "Applying inbound firewall rules"
+if scp scripts/inbound.sh "$HOST:/tmp/inbound.sh" && rsh "sudo bash /tmp/inbound.sh"; then
+    ok "Inbound firewall active (SSH/HTTP/HTTPS only)"
+else
+    warn "Inbound setup failed — run: make setup-inbound"
+fi
+
+# ── Step 2c: Apply container egress allowlist ─────────────────────────────────
 step "Applying container egress allowlist"
 if scp scripts/egress.sh "$HOST:/tmp/egress.sh" && rsh "sudo bash /tmp/egress.sh"; then
     ok "Egress allowlist active (HTTPS/DNS/NTP only)"

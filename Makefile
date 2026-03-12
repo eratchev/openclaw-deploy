@@ -4,7 +4,7 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 # Load HOST from .deploy file written by 'make deploy'
 -include .deploy
 
-.PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress deploy-workspace deploy doctor pair-whatsapp
+.PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress setup-inbound deploy-workspace deploy doctor pair-whatsapp
 
 # Start base services (caddy, openclaw, redis).
 # If voice-proxy is already running (started via make up-voice), it stays running.
@@ -83,6 +83,12 @@ open(p,'w').write(json.dumps(d,indent=2)); print('socket path fixed')"
 	docker compose exec openclaw openclaw config set tools.exec.safeBins '["gcal","date","ai"]'
 	docker compose restart openclaw
 	@echo "Exec approvals configured. Run 'make logs' to verify."
+
+# Apply inbound firewall rules on VPS (run once after deploy, or to re-apply)
+setup-inbound:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	@scp scripts/inbound.sh "$(HOST):/tmp/inbound.sh"
+	@ssh "$(HOST)" "sudo bash /tmp/inbound.sh"
 
 # Apply container egress allowlist on VPS (run once after deploy, or to re-apply)
 setup-egress:

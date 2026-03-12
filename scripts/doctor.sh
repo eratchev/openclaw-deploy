@@ -200,7 +200,7 @@ if [ "${input_policy:-}" = "DROP" ]; then
         warn "Inbound policy is DROP but SSH(22) or HTTPS(443) not found — check iptables -L INPUT"
     fi
 else
-    warn "Inbound firewall  INPUT policy is ACCEPT — run: sudo bash scripts/provision.sh  (or apply rules manually)"
+    warn "Inbound firewall  INPUT policy is ACCEPT — run: make setup-inbound"
 fi
 
 # ── Egress ─────────────────────────────────────────────────────────────────────
