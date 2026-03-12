@@ -100,37 +100,17 @@ OpenClaw can read and write your Google Calendar via an MCP proxy that runs on t
 **One-time setup (local machine):**
 
 ```bash
-# 1. Generate an encryption key and save it
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# → Add GCAL_TOKEN_ENCRYPTION_KEY=<key> to .env (local and VPS)
-
-# 2. Authenticate with Google (requires client_secret.json from Google Cloud Console)
-python3 services/calendar-proxy/scripts/auth_setup.py \
-  --client-secret client_secret.json --out token.json
-
-# 3. Encrypt the token and copy it to the VPS
-python3 services/calendar-proxy/scripts/encrypt_token.py \
-  --token token.json --key <KEY> --out token.enc
-scp token.enc user@<your-vps>:/tmp/
-
-ssh user@<your-vps> "
-  docker run --rm \
-    -v openclaw-deploy_openclaw_data:/data \
-    -v /tmp:/src \
-    busybox sh -c 'cp /src/token.enc /data/gcal_token.enc && chmod 600 /data/gcal_token.enc'
-"
-
-# 4. Clean up plaintext files
-rm client_secret.json token.json token.enc
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json
 ```
 
-**VPS `.env` additions required:**
+This generates a Fernet encryption key, runs the Google OAuth browser flow, encrypts the token, copies it to the VPS, updates `.env`, and restarts the calendar-proxy. Requires `client_secret.json` from Google Cloud Console.
+
+**Additional `.env` vars (add via `make deploy` or manually):**
 
 ```bash
-GCAL_TOKEN_ENCRYPTION_KEY=<key>
-GCAL_USER_TIMEZONE=Europe/Helsinki   # your local timezone
-GCAL_ALLOWED_CALENDARS=primary       # comma-separated calendar IDs
-GCAL_WORK_CALENDAR_ID=               # optional — requires confirmation for any write
+GCAL_USER_TIMEZONE=America/Los_Angeles  # your local timezone
+GCAL_ALLOWED_CALENDARS=primary          # comma-separated calendar IDs
+GCAL_WORK_CALENDAR_ID=                  # optional — requires confirmation for any write
 ```
 
 Then `make up-calendar` to start the base stack **plus** the calendar-proxy container. (Plain `make up` skips `calendar-proxy` — it only starts when explicitly requested via the `calendar` profile.)
@@ -190,8 +170,12 @@ docker compose restart openclaw
 The `workspace/` directory contains the agent's instruction files. These are copied into the container at runtime and control agent behaviour:
 
 - `AGENTS.md` — injected into every system prompt (always active, all sessions)
-- `MEMORY.md` — loaded in direct/DM sessions only (personal context, not shared in groups)
+- `SOUL.md` — agent identity and personality
+- `POLICY.md` — safety rules, authority model, guardrails
+- `OPERATIONS.md` — execution model and tool usage
+- `USER.md` — who the agent is helping (preferences, context)
 - `COMMANDS.md` — global commands available in all sessions including groups
+- `MEMORY.md` — long-term memory, loaded in direct/DM sessions only (not shared in groups)
 
 Edit the files locally, then deploy:
 
