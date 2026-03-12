@@ -474,3 +474,71 @@ If the VPS itself may be compromised (not just a leaked API key):
   make restart
   ```
 - `make doctor`
+
+---
+
+## 13. Egress Control
+
+Docker containers are restricted to outbound HTTPS (443), DNS (53), and NTP (123) only. This prevents cleartext data exfiltration from a compromised container. Implemented via the `OPENCLAW_EGRESS` iptables chain, hooked into Docker's `DOCKER-USER` forwarding chain.
+
+### First-time setup (existing VPS)
+
+```bash
+make setup-egress
+make doctor    # confirm "Egress allowlist active"
+```
+
+### Verify rules are active
+
+```bash
+# On VPS:
+sudo iptables -L OPENCLAW_EGRESS -n --line-numbers
+sudo iptables -L DOCKER-USER -n | head -5
+```
+
+Expected: OPENCLAW_EGRESS shows ESTABLISHED, DNS(53), NTP(123), HTTPS(443), DROP rules. DOCKER-USER shows OPENCLAW_EGRESS at position 1.
+
+### Verify connectivity (on VPS)
+
+```bash
+# Port 443 must work (Anthropic, Telegram, etc.):
+docker compose exec openclaw sh -c "nc -zw5 api.anthropic.com 443 && echo OK"
+
+# Port 80 must be blocked (cleartext exfiltration):
+docker compose exec openclaw sh -c "nc -zw3 example.com 80 && echo OPEN || echo BLOCKED"
+# Expected: BLOCKED
+```
+
+### Rules don't survive reboot?
+
+`egress.sh` installs `iptables-persistent` and calls `netfilter-persistent save`. If rules are lost after reboot, re-apply manually and save again:
+
+```bash
+make setup-egress    # from local machine
+# OR on VPS directly:
+sudo bash scripts/egress.sh
+```
+
+### Disable egress control (for debugging)
+
+```bash
+# On VPS:
+sudo iptables -D DOCKER-USER -o $(ip route | awk '/^default/ {print $5; exit}') -j OPENCLAW_EGRESS
+# Re-enable: make setup-egress
+```
+
+### Allowed outbound endpoints
+
+All external APIs use HTTPS (443), which is allowed:
+
+| Service | Endpoint | Port |
+|---|---|---|
+| Anthropic | `api.anthropic.com` | 443 |
+| Telegram | `api.telegram.org` | 443 |
+| OpenAI (voice) | `api.openai.com` | 443 |
+| Brave Search | `api.search.brave.com` | 443 |
+| Google Calendar | `accounts.google.com`, `www.googleapis.com` | 443 |
+| Hetzner S3 | `hel1.your-objectstorage.com` | 443 |
+| Let's Encrypt | `acme-v02.api.letsencrypt.org` | 443 |
+
+All of these work through the HTTPS-only allowlist with no IP pinning required.
