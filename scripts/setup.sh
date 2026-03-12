@@ -248,7 +248,16 @@ else
     warn "WEBHOOK_SECRET not set — webhook is unauthenticated"
 fi
 
-# ── Step 8: Backup cron ───────────────────────────────────────────────────────
+# ── Step 8: Deploy workspace files ───────────────────────────────────────────
+step "Deploying workspace files"
+scp workspace/*.md "$HOST:/tmp/"
+for f in workspace/*.md; do
+    fname=$(basename "$f")
+    rsh "$COMPOSE_CMD cp /tmp/$fname openclaw:/home/node/.openclaw/workspace/$fname && rm -f /tmp/$fname"
+done
+ok "Workspace files deployed"
+
+# ── Step 10: Backup cron ──────────────────────────────────────────────────────
 backup_cron_ok=false
 if [[ "${backup_yn,,}" == "y" ]]; then
     step "Installing backup cron"
@@ -260,7 +269,7 @@ if [[ "${backup_yn,,}" == "y" ]]; then
     fi
 fi
 
-# ── Step 9: WhatsApp pairing (optional, interactive) ─────────────────────────
+# ── Step 11: WhatsApp pairing (optional, interactive) ────────────────────────
 whatsapp_paired=false
 echo ""
 printf "  Pair WhatsApp now? [y/N]: " >&2; read -r whatsapp_yn
