@@ -117,7 +117,7 @@ services:
       - GCAL_AUDIT_MAX_MB=${GCAL_AUDIT_MAX_MB:-50}
       - GCAL_DRY_RUN=${GCAL_DRY_RUN:-false}
       - GCAL_HEALTH_CHECK_GOOGLE=${GCAL_HEALTH_CHECK_GOOGLE:-false}
-      - GCAL_TOKEN_ENCRYPTION_KEY=${GCAL_TOKEN_ENCRYPTION_KEY}
+      - GCAL_TOKEN_ENCRYPTION_KEY=${GCAL_TOKEN_ENCRYPTION_KEY:-}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
