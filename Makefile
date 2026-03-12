@@ -4,7 +4,7 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 # Load HOST from .deploy file written by 'make deploy'
 -include .deploy
 
-.PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress setup-inbound deploy-workspace deploy doctor pair-whatsapp
+.PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress setup-inbound setup-gcal deploy-workspace deploy doctor pair-whatsapp
 
 # Start all services (caddy, openclaw, redis, voice-proxy).
 up:
@@ -130,6 +130,13 @@ deploy:
 doctor:
 	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
 	@ssh "$(HOST)" "cd ~/openclaw-deploy && bash scripts/doctor.sh"
+
+# Set up Google Calendar OAuth (run locally on Mac, requires client_secret.json)
+# Usage: make setup-gcal CLIENT_SECRET=path/to/client_secret.json
+setup-gcal:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	@[ -n "$(CLIENT_SECRET)" ] || (echo "Usage: make setup-gcal CLIENT_SECRET=path/to/client_secret.json" && exit 1)
+	@bash scripts/setup-gcal.sh "$(HOST)" "$(CLIENT_SECRET)"
 
 # Pair WhatsApp interactively (renders QR code in your terminal)
 pair-whatsapp:
