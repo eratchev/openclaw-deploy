@@ -149,6 +149,13 @@ if [[ "${backup_yn,,}" == "y" ]]; then
     BACKUP_RETAIN_DAYS=$(ask BACKUP_RETAIN_DAYS "Backup retention (days)" "7")
 fi
 
+printf "  Enable Telegram alerts (guardrail kills, backup failures)? [y/N]: " >&2; read -r alerts_yn
+ALERT_TELEGRAM_CHAT_ID=""
+if [[ "${alerts_yn,,}" == "y" ]]; then
+    echo "  Find your chat ID: message @userinfobot on Telegram" >&2
+    ALERT_TELEGRAM_CHAT_ID=$(ask ALERT_TELEGRAM_CHAT_ID "Your Telegram chat ID")
+fi
+
 # Write .env to VPS
 step "Writing .env to VPS"
 
@@ -171,6 +178,7 @@ BACKUP_S3_ACCESS_KEY=${BACKUP_S3_ACCESS_KEY}
 BACKUP_S3_SECRET_KEY=${BACKUP_S3_SECRET_KEY}
 BACKUP_S3_REGION=${BACKUP_S3_REGION}
 BACKUP_RETAIN_DAYS=${BACKUP_RETAIN_DAYS}
+ALERT_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID}
 EOF
 ok ".env written"
 
@@ -270,6 +278,11 @@ elif [ -n "$BACKUP_S3_BUCKET" ]; then
     echo -e "  ${YELLOW}⚠️ ${NC} Backups     S3 configured but cron failed — run on VPS: sudo bash scripts/install-backup-cron.sh"
 else
     echo -e "  ${YELLOW}⚪${NC} Backups     not configured (re-run make deploy to add S3 credentials)"
+fi
+if [ -n "$ALERT_TELEGRAM_CHAT_ID" ]; then
+    echo -e "  ${GREEN}✅${NC} Alerts      Telegram alerts enabled (chat $ALERT_TELEGRAM_CHAT_ID)"
+else
+    echo -e "  ${YELLOW}⚪${NC} Alerts      disabled — re-run make deploy to enable"
 fi
 echo -e "  ${YELLOW}⚪${NC} Calendar    Google Calendar not set up — see docs/runbook.md §10"
 echo ""
