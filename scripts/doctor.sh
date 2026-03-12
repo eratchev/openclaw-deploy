@@ -186,6 +186,23 @@ else
     warn "NODE_OPTIONS  not set — V8 heap unbounded (OOM risk on 2GB hosts; set NODE_OPTIONS=--max-old-space-size=768 in .env)"
 fi
 
+# ── Inbound ────────────────────────────────────────────────────────────────────
+
+echo ""
+echo " Inbound"
+
+input_policy=$(sudo iptables -L INPUT -n 2>/dev/null | awk 'NR==1{print $NF}')
+if [ "${input_policy:-}" = "DROP" ]; then
+    input_rules=$(sudo iptables -L INPUT -n 2>/dev/null)
+    if echo "$input_rules" | grep -q "dpt:22" && echo "$input_rules" | grep -q "dpt:443"; then
+        pass "Inbound firewall  active (policy DROP, SSH/443 open)"
+    else
+        warn "Inbound policy is DROP but SSH(22) or HTTPS(443) not found — check iptables -L INPUT"
+    fi
+else
+    warn "Inbound firewall  INPUT policy is ACCEPT — run: sudo bash scripts/provision.sh  (or apply rules manually)"
+fi
+
 # ── Egress ─────────────────────────────────────────────────────────────────────
 
 echo ""
