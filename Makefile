@@ -94,12 +94,21 @@ setup-egress:
 	@scp scripts/egress.sh "$(HOST):/tmp/egress.sh"
 	@ssh "$(HOST)" "sudo bash /tmp/egress.sh"
 
-# Deploy workspace files (AGENTS.md, MEMORY.md, COMMANDS.md) to container
+# Deploy workspace files to container (local) or remote VPS (if HOST set)
 deploy-workspace:
-	@for f in workspace/*.md; do \
-		docker compose cp $$f openclaw:/home/node/.openclaw/workspace/$$(basename $$f); \
-		echo "Deployed $$f"; \
-	done
+	@if [ -n "$(HOST)" ]; then \
+		scp workspace/*.md "$(HOST):/tmp/" && \
+		for f in workspace/*.md; do \
+			fname=$$(basename $$f); \
+			ssh "$(HOST)" "cd ~/openclaw-deploy && sudo docker compose cp /tmp/$$fname openclaw:/home/node/.openclaw/workspace/$$fname && rm -f /tmp/$$fname"; \
+			echo "Deployed $$fname"; \
+		done; \
+	else \
+		for f in workspace/*.md; do \
+			docker compose cp $$f openclaw:/home/node/.openclaw/workspace/$$(basename $$f); \
+			echo "Deployed $$f"; \
+		done; \
+	fi
 
 # Activate manual kill switch
 kill-switch:
