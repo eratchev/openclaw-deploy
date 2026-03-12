@@ -199,7 +199,7 @@ step "Starting services on VPS"
 
 COMPOSE_CMD="sudo docker compose"
 
-rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD up -d"
+rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD up -d --force-recreate"
 ok "Started stack"
 
 # ── Step 6: Health wait ───────────────────────────────────────────────────────
