@@ -212,7 +212,7 @@ rsh "cd $REMOTE_DIR && $COMPOSE_CMD up -d --force-recreate"
 ok "Started stack"
 
 # ── Step 6: Health wait ───────────────────────────────────────────────────────
-step "Waiting for services to become healthy (up to 60s)"
+step "Waiting for services to become healthy (up to 90s)"
 
 deadline=$(($(date +%s) + 90))
 all_healthy=false
