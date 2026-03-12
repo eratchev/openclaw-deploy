@@ -16,7 +16,7 @@ set -euo pipefail
 echo "[egress] Applying container egress allowlist..."
 
 # ── Detect external interface ──────────────────────────────────────────────────
-EXTERNAL_IF=$(ip route | awk '/^default/ {print $5; exit}')
+EXTERNAL_IF=$(ip -4 route show default | awk 'NR==1{print $5}')
 if [ -z "$EXTERNAL_IF" ]; then
     echo "[egress] ERROR: Cannot detect external interface (no default route?)."
     exit 1
