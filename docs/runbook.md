@@ -542,3 +542,51 @@ All external APIs use HTTPS (443), which is allowed:
 | Let's Encrypt | `acme-v02.api.letsencrypt.org` | 443 |
 
 All of these work through the HTTPS-only allowlist with no IP pinning required.
+
+## 14. Inbound Firewall
+
+The VPS INPUT chain is locked to a minimal allowlist — SSH (22), HTTP (80 for Let's Encrypt ACME), and HTTPS (443). All other inbound traffic is dropped. Managed by `scripts/inbound.sh` and persisted by `iptables-persistent`.
+
+**Note:** UFW is not used. It conflicts with `iptables-persistent` on Ubuntu 24.04 (apt removes UFW when installing iptables-persistent, flushing all rules). Direct iptables rules are used instead.
+
+### First-time setup (existing VPS)
+
+```bash
+make setup-inbound
+make doctor    # confirm "Inbound firewall active"
+```
+
+### Verify rules are active
+
+```bash
+# On VPS:
+sudo iptables -L INPUT -n --line-numbers
+```
+
+Expected: policy DROP, with ACCEPT rules for loopback, ESTABLISHED/RELATED, tcp dpt:22, tcp dpt:80, tcp dpt:443.
+
+### Rules don't survive reboot?
+
+`inbound.sh` calls `netfilter-persistent save` after applying rules. If rules are lost after reboot, re-apply and save:
+
+```bash
+make setup-inbound    # from local machine
+# OR on VPS directly:
+sudo bash scripts/inbound.sh
+```
+
+### Temporarily allow all inbound (for debugging)
+
+```bash
+# On VPS — CAUTION: opens the server to the internet
+sudo iptables -P INPUT ACCEPT
+# Restore: make setup-inbound
+```
+
+### Inbound allowlist
+
+| Port | Protocol | Purpose |
+|---|---|---|
+| 22 | TCP | SSH admin access |
+| 80 | TCP | Let's Encrypt ACME HTTP challenge |
+| 443 | TCP | HTTPS — Caddy TLS termination |
