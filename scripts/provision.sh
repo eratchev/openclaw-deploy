@@ -43,19 +43,6 @@ ufw allow 80/tcp comment "HTTP ACME challenge"
 ufw --force enable
 echo "[provision] UFW inbound rules applied."
 
-# ── Container egress allowlist ────────────────────────────────────────────────
-# Restricts Docker container outbound to HTTPS(443), DNS(53), NTP(123).
-# Requires Docker daemon to be running (DOCKER-USER chain must exist).
-if command -v docker &>/dev/null; then
-  # Explicitly start daemon — the Docker installer leaves the binary available
-  # but the daemon may not have started yet, and DOCKER-USER only exists once
-  # the daemon is running.
-  systemctl start docker
-  bash "$(dirname "$0")/egress.sh"
-else
-  echo "[provision] Skipping egress rules — Docker not installed. Run: sudo bash scripts/egress.sh"
-fi
-
 # ── Fail2ban ──────────────────────────────────────────────────────────────────
 systemctl enable --now fail2ban
 echo "[provision] Fail2ban enabled."
@@ -67,6 +54,13 @@ if ! command -v docker &>/dev/null; then
 else
   echo "[provision] Docker already installed."
 fi
+
+# ── Container egress allowlist ────────────────────────────────────────────────
+# Restricts Docker container outbound to HTTPS(443), DNS(53), NTP(123).
+# Requires Docker daemon to be running (DOCKER-USER chain must exist).
+# Explicitly start daemon — the installer may not have started it yet.
+systemctl start docker
+bash "$(dirname "$0")/egress.sh"
 
 # ── /data volume permissions ─────────────────────────────────────────────────
 # Ensure openclaw_data volume is owned by UID 1000 (node user).
