@@ -5,6 +5,7 @@ set -euo pipefail
 
 HOST="${1:-}"
 CLIENT_SECRET="${2:-}"
+CLIENT_SECRET="${CLIENT_SECRET/#\~/$HOME}"
 
 if [ -z "$HOST" ] || [ -z "$CLIENT_SECRET" ]; then
     echo "Usage: $0 user@host path/to/client_secret.json"
