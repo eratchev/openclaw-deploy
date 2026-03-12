@@ -21,6 +21,21 @@ APT::Periodic::Unattended-Upgrade "1";
 EOF
 systemctl enable --now unattended-upgrades
 
+# ── Swap ──────────────────────────────────────────────────────────────────────
+# OpenClaw (Node.js) needs ~500-700 MB heap at startup. On a 2 GB VPS, without
+# swap the kernel OOMs the process before it finishes booting.
+# Create a 2 GB swapfile if one does not already exist.
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  echo "[provision] 2 GB swapfile created and enabled."
+else
+  echo "[provision] Swapfile already exists — skipping."
+fi
+
 # ── SSH key guard ─────────────────────────────────────────────────────────────
 if ! find /root/.ssh /home -name authorized_keys -size +0c 2>/dev/null | grep -q .; then
   echo "[provision] ERROR: No authorized_keys found. Add your SSH public key before running."

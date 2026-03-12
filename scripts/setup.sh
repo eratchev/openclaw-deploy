@@ -232,7 +232,11 @@ echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 echo -e "  ${GREEN}✅${NC} Telegram    @your_bot — send it a message"
 echo -e "  ${YELLOW}⚪${NC} WhatsApp    not paired — run: make pair-whatsapp"
-[ -z "$BACKUP_S3_BUCKET" ] && echo -e "  ${YELLOW}⚠️ ${NC} Backups     not configured — run: sudo bash scripts/install-backup-cron.sh"
+if [ -z "$BACKUP_S3_BUCKET" ]; then
+    echo -e "  ${YELLOW}⚪${NC} Backups     not configured — run: sudo bash scripts/install-backup-cron.sh"
+else
+    echo -e "  ${YELLOW}⚠️ ${NC} Backups     S3 configured — install cron: sudo bash scripts/install-backup-cron.sh"
+fi
 echo ""
 echo "  Health check:  make doctor"
 echo "  Logs:          make logs"
