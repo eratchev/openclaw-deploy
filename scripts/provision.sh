@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # OpenClaw VPS provisioning script
 # Run once as root on a fresh Ubuntu LTS VPS.
-# WARNING: UFW rules are reset on each run — do not re-run on a live system with custom rules.
+# Note: iptables-persistent (installed by egress.sh) manages firewall persistence.
+#       UFW is not used — it conflicts with iptables-persistent on Ubuntu 24.04.
 set -euo pipefail
 
 echo "[provision] Starting VPS hardening..."
@@ -10,7 +11,7 @@ echo "[provision] Starting VPS hardening..."
 apt-get update -q
 apt-get upgrade -y -q
 apt-get install -y -q \
-  ufw fail2ban unattended-upgrades curl git python3 \
+  fail2ban unattended-upgrades curl git python3 \
   apt-transport-https ca-certificates gnupg
 
 # ── Unattended security upgrades ──────────────────────────────────────────────
@@ -33,15 +34,24 @@ sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd
 sed -i 's/^#\?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 systemctl reload ssh
 
-# ── UFW inbound rules ─────────────────────────────────────────────────────────
-ufw --force reset
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow 22/tcp comment "SSH"
-ufw allow 443/tcp comment "HTTPS Caddy"
-ufw allow 80/tcp comment "HTTP ACME challenge"
-ufw --force enable
-echo "[provision] UFW inbound rules applied."
+# ── Inbound firewall rules ────────────────────────────────────────────────────
+# Use iptables directly. UFW is not used because iptables-persistent (installed
+# by egress.sh below) conflicts with UFW on Ubuntu 24.04 and removes it.
+# Rules are persisted by the netfilter-persistent save call in egress.sh.
+
+# Remove UFW if pre-installed (Ubuntu ships it by default).
+if dpkg -l ufw 2>/dev/null | grep -q '^ii'; then
+  apt-get remove -y --purge ufw
+fi
+
+iptables -F INPUT 2>/dev/null || true
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -p tcp --dport 22  -j ACCEPT
+iptables -A INPUT -p tcp --dport 80  -j ACCEPT
+iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+iptables -P INPUT DROP
+echo "[provision] Inbound firewall: SSH(22), HTTP(80), HTTPS(443) — all else blocked."
 
 # ── Fail2ban ──────────────────────────────────────────────────────────────────
 systemctl enable --now fail2ban
