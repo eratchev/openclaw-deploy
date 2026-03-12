@@ -301,7 +301,11 @@ if [ -n "$ALERT_TELEGRAM_CHAT_ID" ]; then
 else
     echo -e "  ${YELLOW}⚪${NC} Alerts      disabled — re-run make deploy to enable"
 fi
-echo -e "  ${YELLOW}⚪${NC} Calendar    Google Calendar not set up — see docs/runbook.md §10"
+if rsh "sudo docker compose -f $REMOTE_DIR/docker-compose.yml exec -T openclaw test -f /home/node/.openclaw/gcal_token.enc" 2>/dev/null; then
+    echo -e "  ${GREEN}✅${NC} Calendar    Google Calendar configured"
+else
+    echo -e "  ${YELLOW}⚪${NC} Calendar    Google Calendar not set up — see docs/runbook.md §10"
+fi
 echo ""
 echo "  Health check:  make doctor"
 echo "  Logs:          make logs"
