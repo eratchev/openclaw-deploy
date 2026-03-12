@@ -224,6 +224,34 @@ else
     warn "WEBHOOK_SECRET not set — webhook is unauthenticated"
 fi
 
+# ── Step 8: Backup cron ───────────────────────────────────────────────────────
+backup_cron_ok=false
+if [[ "${backup_yn,,}" == "y" ]]; then
+    step "Installing backup cron"
+    if rsh "sudo bash '$REMOTE_DIR/scripts/install-backup-cron.sh'"; then
+        ok "Backup cron installed (daily 03:00 UTC → $BACKUP_S3_BUCKET)"
+        backup_cron_ok=true
+    else
+        warn "Backup cron install failed — run on VPS: sudo bash scripts/install-backup-cron.sh"
+    fi
+fi
+
+# ── Step 9: WhatsApp pairing (optional, interactive) ─────────────────────────
+whatsapp_paired=false
+echo ""
+printf "  Pair WhatsApp now? [y/N]: " >&2; read -r whatsapp_yn
+if [[ "${whatsapp_yn,,}" == "y" ]]; then
+    step "Pairing WhatsApp"
+    echo "  Scan the QR code with WhatsApp → Linked Devices → Link a device"
+    echo "  (press Ctrl+C to cancel)"
+    if ssh -t "$HOST" "sudo docker compose -f '$REMOTE_DIR/docker-compose.yml' exec -it openclaw openclaw channels login --channel whatsapp"; then
+        ok "WhatsApp paired"
+        whatsapp_paired=true
+    else
+        warn "WhatsApp pairing cancelled or failed — run: make pair-whatsapp"
+    fi
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -231,12 +259,19 @@ echo -e "${BOLD}  openclaw-deploy is running${NC}"
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo -e "  ${GREEN}✅${NC} Telegram    @your_bot — send it a message"
-echo -e "  ${YELLOW}⚪${NC} WhatsApp    not paired — run: make pair-whatsapp"
-if [ -z "$BACKUP_S3_BUCKET" ]; then
-    echo -e "  ${YELLOW}⚪${NC} Backups     not configured — run: sudo bash scripts/install-backup-cron.sh"
+if $whatsapp_paired; then
+    echo -e "  ${GREEN}✅${NC} WhatsApp    paired"
 else
-    echo -e "  ${YELLOW}⚠️ ${NC} Backups     S3 configured — install cron: sudo bash scripts/install-backup-cron.sh"
+    echo -e "  ${YELLOW}⚪${NC} WhatsApp    not paired — run: make pair-whatsapp"
 fi
+if $backup_cron_ok; then
+    echo -e "  ${GREEN}✅${NC} Backups     cron active (daily 03:00 UTC)"
+elif [ -n "$BACKUP_S3_BUCKET" ]; then
+    echo -e "  ${YELLOW}⚠️ ${NC} Backups     S3 configured but cron failed — run on VPS: sudo bash scripts/install-backup-cron.sh"
+else
+    echo -e "  ${YELLOW}⚪${NC} Backups     not configured (re-run make deploy to add S3 credentials)"
+fi
+echo -e "  ${YELLOW}⚪${NC} Calendar    Google Calendar not set up — see docs/runbook.md §10"
 echo ""
 echo "  Health check:  make doctor"
 echo "  Logs:          make logs"
