@@ -253,7 +253,7 @@ step "Deploying workspace files"
 scp workspace/*.md "$HOST:/tmp/"
 for f in workspace/*.md; do
     fname=$(basename "$f")
-    rsh "$COMPOSE_CMD cp /tmp/$fname openclaw:/home/node/.openclaw/workspace/$fname && rm -f /tmp/$fname"
+    rsh "cd $REMOTE_DIR && $COMPOSE_CMD cp /tmp/$fname openclaw:/home/node/.openclaw/workspace/$fname && rm -f /tmp/$fname"
 done
 ok "Workspace files deployed"
 
