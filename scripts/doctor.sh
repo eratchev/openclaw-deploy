@@ -186,6 +186,21 @@ else
     warn "NODE_OPTIONS  not set — V8 heap unbounded (OOM risk on 2GB hosts; set NODE_OPTIONS=--max-old-space-size=768 in .env)"
 fi
 
+# ── Egress ─────────────────────────────────────────────────────────────────────
+
+echo ""
+echo " Egress"
+
+if sudo iptables -L OPENCLAW_EGRESS -n &>/dev/null; then
+    if sudo iptables -L DOCKER-USER -n 2>/dev/null | grep -q "OPENCLAW_EGRESS"; then
+        pass "Egress allowlist  active (HTTPS/DNS/NTP only)"
+    else
+        warn "Egress chain exists but not hooked into DOCKER-USER — run: make setup-egress"
+    fi
+else
+    warn "Egress allowlist  not configured — run: make setup-egress"
+fi
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 
 echo ""
