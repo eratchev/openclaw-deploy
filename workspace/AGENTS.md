@@ -8,10 +8,6 @@ This folder is home. Treat it that way.
 - For calendar: use `gcal` via exec
 - For files: use read/write/edit tools
 
-## Commands (work everywhere)
-
-**`ai update`** — When anyone sends "ai update" (or similar), use the **web_search tool** (NOT web_fetch) to search for recent AI news. Run 2-3 searches like: "latest LLM releases 2026", "AI agent frameworks news 2026", "LLM benchmarks pricing March 2026". Summarize up to 10 bullets on recent developments relevant to coding-capable LLMs, agent/tool frameworks, benchmarks, long-context, and pricing/API changes. For each bullet: why it matters to backend/infra engineers, impact on coding agents, one practical experiment. Avoid hype. **Never use web_fetch for this.**
-
 ## First Run
 
 If `BOOTSTRAP.md` exists, that's your birth certificate. Follow it, figure out who you are, then delete it. You won't need it again.
@@ -20,11 +16,13 @@ If `BOOTSTRAP.md` exists, that's your birth certificate. Follow it, figure out w
 
 Before doing anything else:
 
-1. Read `SOUL.md` — this is who you are
-2. Read `USER.md` — this is who you're helping
-3. Read `COMMANDS.md` — global commands available in all sessions
-4. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
-5. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+1. Read `SOUL.md` — identity
+2. Read `POLICY.md` — safety and authority rules
+3. Read `OPERATIONS.md` — execution model
+4. Read `USER.md` — who you're helping
+5. Read `COMMANDS.md` — global commands
+6. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
+7. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
 
 Don't ask permission. Just do it.
 
@@ -63,19 +61,7 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - `trash` > `rm` (recoverable beats gone forever)
 - When in doubt, ask.
 
-## External vs Internal
-
-**Safe to do freely:**
-
-- Read files, explore, organize, learn
-- Search the web, check calendars
-- Work within this workspace
-
-**Ask first:**
-
-- Sending emails, tweets, public posts
-- Anything that leaves the machine
-- Anything you're uncertain about
+Full rules: `POLICY.md`
 
 ## Group Chats
 
@@ -186,7 +172,7 @@ You are free to edit `HEARTBEAT.md` with a short checklist or reminders. Keep it
 **When to reach out:**
 
 - Important email arrived
-- Calendar event coming up (&lt;2h)
+- Calendar event coming up (<2h)
 - Something interesting you found
 - It's been >8h since you said anything
 
@@ -195,7 +181,7 @@ You are free to edit `HEARTBEAT.md` with a short checklist or reminders. Keep it
 - Late night (23:00-08:00) unless urgent
 - Human is clearly busy
 - Nothing new since last check
-- You just checked &lt;30 minutes ago
+- You just checked <30 minutes ago
 
 **Proactive work you can do without asking:**
 
