@@ -132,14 +132,27 @@ fi
 
 echo ""
 echo "  Optional integrations:"
-printf "  Enable voice transcription (requires OpenAI key)? [y/N]: " >&2; read -r voice_yn
-OPENAI_API_KEY=""
+# Initialise optional vars from existing .env so re-runs preserve config when
+# the user skips a section (answers N). The if-blocks below overwrite on Y.
+OPENAI_API_KEY=$(get_existing OPENAI_API_KEY)
+BACKUP_S3_ENDPOINT=$(get_existing BACKUP_S3_ENDPOINT)
+BACKUP_S3_BUCKET=$(get_existing BACKUP_S3_BUCKET)
+BACKUP_S3_ACCESS_KEY=$(get_existing BACKUP_S3_ACCESS_KEY)
+BACKUP_S3_SECRET_KEY=$(get_existing BACKUP_S3_SECRET_KEY)
+BACKUP_S3_REGION=$(get_existing BACKUP_S3_REGION); BACKUP_S3_REGION=${BACKUP_S3_REGION:-hel1}
+BACKUP_RETAIN_DAYS=$(get_existing BACKUP_RETAIN_DAYS); BACKUP_RETAIN_DAYS=${BACKUP_RETAIN_DAYS:-7}
+ALERT_TELEGRAM_CHAT_ID=$(get_existing ALERT_TELEGRAM_CHAT_ID)
+
+[ -n "$OPENAI_API_KEY" ]          && _voice_hint=" [currently enabled]"   || _voice_hint=""
+[ -n "$BACKUP_S3_BUCKET" ]        && _backup_hint=" [currently: $BACKUP_S3_BUCKET]" || _backup_hint=""
+[ -n "$ALERT_TELEGRAM_CHAT_ID" ]  && _alerts_hint=" [currently: chat $ALERT_TELEGRAM_CHAT_ID]" || _alerts_hint=""
+
+printf "  Enable voice transcription (requires OpenAI key)?%s [y/N]: " "$_voice_hint" >&2; read -r voice_yn
 if [[ "${voice_yn,,}" == "y" ]]; then
     OPENAI_API_KEY=$(ask_secret OPENAI_API_KEY "OpenAI API key")
 fi
 
-printf "  Configure Hetzner S3 backups? [y/N]: " >&2; read -r backup_yn
-BACKUP_S3_ENDPOINT=""; BACKUP_S3_BUCKET=""; BACKUP_S3_ACCESS_KEY=""; BACKUP_S3_SECRET_KEY=""; BACKUP_S3_REGION="hel1"; BACKUP_RETAIN_DAYS=7
+printf "  Configure Hetzner S3 backups?%s [y/N]: " "$_backup_hint" >&2; read -r backup_yn
 if [[ "${backup_yn,,}" == "y" ]]; then
     BACKUP_S3_ENDPOINT=$(ask BACKUP_S3_ENDPOINT "S3 endpoint" "https://hel1.your-objectstorage.com")
     BACKUP_S3_BUCKET=$(ask   BACKUP_S3_BUCKET   "S3 bucket name")
@@ -149,8 +162,7 @@ if [[ "${backup_yn,,}" == "y" ]]; then
     BACKUP_RETAIN_DAYS=$(ask BACKUP_RETAIN_DAYS "Backup retention (days)" "7")
 fi
 
-printf "  Enable Telegram alerts (guardrail kills, backup failures)? [y/N]: " >&2; read -r alerts_yn
-ALERT_TELEGRAM_CHAT_ID=""
+printf "  Enable Telegram alerts (guardrail kills, backup failures)?%s [y/N]: " "$_alerts_hint" >&2; read -r alerts_yn
 if [[ "${alerts_yn,,}" == "y" ]]; then
     echo "  Find your chat ID: message @userinfobot on Telegram" >&2
     ALERT_TELEGRAM_CHAT_ID=$(ask ALERT_TELEGRAM_CHAT_ID "Your Telegram chat ID")
