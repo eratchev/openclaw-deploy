@@ -165,8 +165,11 @@ def handle_create_event(args: dict) -> dict:
     service = build_google_service()
     body = {"summary": event_input.title, "start": {"dateTime": event_input.start},
             "end": {"dateTime": event_input.end}}
+    CREATED_BY = "Created by @eratOpenClawBot"
     if event_input.description:
-        body["description"] = event_input.description
+        body["description"] = f"{event_input.description}\n\n{CREATED_BY}"
+    else:
+        body["description"] = CREATED_BY
     if event_input.recurrence:
         body["recurrence"] = [f"RRULE:{event_input.recurrence.rrule}"]
     created = service.events().insert(calendarId=event_input.calendar_id, body=body).execute()
