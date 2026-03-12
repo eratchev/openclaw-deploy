@@ -72,7 +72,7 @@ check_required REDIS_PASSWORD    "REDIS_PASSWORD"
 check_required ANTHROPIC_API_KEY "ANTHROPIC_API_KEY"
 check_optional BACKUP_S3_BUCKET  "BACKUP_S3_BUCKET" "backups disabled"
 check_optional OPENAI_API_KEY    "OPENAI_API_KEY"   "voice transcription disabled"
-check_optional WEBHOOK_SECRET    "WEBHOOK_SECRET"   "voice webhook unauthenticated"
+check_optional WEBHOOK_SECRET    "WEBHOOK_SECRET"   "Telegram webhook unauthenticated"
 check_optional ALERT_TELEGRAM_CHAT_ID "ALERT_TELEGRAM_CHAT_ID" "guardrail/backup alerts disabled  →  set to your Telegram chat ID (message @userinfobot to find it)"
 
 # ── Services ───────────────────────────────────────────────────────────────────

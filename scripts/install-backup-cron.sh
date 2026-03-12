@@ -14,9 +14,20 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+# Install aws CLI if not present (required by backup-cron.sh)
+if ! command -v aws &>/dev/null; then
+  echo "[install-backup-cron] Installing aws CLI..."
+  apt-get install -y -q awscli
+fi
+
 # Install an immutable snapshot to /usr/local/sbin so the cron job
 # is not affected by future 'git pull' updates to the repo.
-install -m 0700 "$SCRIPT" "$INSTALL_PATH"
+# Rewrite the REPO= line to the absolute path so the script works
+# from /usr/local/sbin (where dirname "$0" would resolve to /usr/local).
+tmpfile=$(mktemp)
+sed "s|^REPO=.*|REPO=\"${REPO}\"|" "$SCRIPT" > "$tmpfile"
+install -m 0700 "$tmpfile" "$INSTALL_PATH"
+rm -f "$tmpfile"
 
 # Install into root crontab (idempotent — remove existing entry first)
 (

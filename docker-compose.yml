@@ -97,6 +97,7 @@ services:
     profiles: [calendar]
     restart: unless-stopped
     networks:
+      - ingress
       - internal
     depends_on:
       - redis
@@ -135,7 +136,6 @@ services:
 
   voice-proxy:
     build: ./services/voice-proxy
-    profiles: [voice]
     restart: unless-stopped
     networks:
       - ingress

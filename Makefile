@@ -6,20 +6,18 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 
 .PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress setup-inbound deploy-workspace deploy doctor pair-whatsapp
 
-# Start base services (caddy, openclaw, redis).
-# If voice-proxy is already running (started via make up-voice), it stays running.
-# Use 'make down' to stop all services including voice-proxy.
+# Start all services (caddy, openclaw, redis, voice-proxy).
 up:
 	docker compose up -d
 
-# Start base services + Google Calendar proxy
+# Start all services + Google Calendar proxy
 up-calendar:
 	docker compose --profile calendar up -d
 
-# Start base services + voice transcription proxy
+# Force-rebuild voice-proxy (e.g. after code changes to services/voice-proxy)
 up-voice:
-	docker compose --profile voice up -d --build
-	@echo "Voice proxy started. Test by sending a voice note to your bot."
+	docker compose up -d --build voice-proxy
+	@echo "Voice proxy rebuilt and started."
 
 # Stop all services
 down:

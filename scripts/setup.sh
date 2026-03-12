@@ -27,8 +27,8 @@ step "Checking prerequisites on VPS"
 
 rsh "command -v docker > /dev/null 2>&1" || {
     warn "Docker not found — running provision.sh"
-    # Copy provision.sh and run it
-    scp scripts/provision.sh "$HOST:/tmp/provision.sh"
+    # Copy all three scripts provision.sh needs at runtime
+    scp scripts/provision.sh scripts/inbound.sh scripts/egress.sh "$HOST:/tmp/"
     rsh "sudo bash /tmp/provision.sh"
     ok "Provision complete"
 }
@@ -199,13 +199,8 @@ step "Starting services on VPS"
 
 COMPOSE_CMD="sudo docker compose"
 
-if [ -n "$OPENAI_API_KEY" ]; then
-    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD --profile voice up -d --build"
-    ok "Started with voice transcription"
-else
-    rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD up -d"
-    ok "Started base stack"
-fi
+rsh "cd '$REMOTE_DIR' && $COMPOSE_CMD up -d"
+ok "Started stack"
 
 # ── Step 6: Health wait ───────────────────────────────────────────────────────
 step "Waiting for services to become healthy (up to 60s)"
