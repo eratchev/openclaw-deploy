@@ -6,3 +6,5 @@ aioresponses>=0.7
 # install alongside: pip install -r services/voice-proxy/requirements.txt
 # calendar-proxy service deps (needed to run tests/calendar_proxy/*)
 # install alongside: pip install -r services/calendar-proxy/requirements.txt
+# mail-proxy service deps (needed to run tests/mail_proxy/*)
+# install alongside: pip install -r services/mail-proxy/requirements.txt
