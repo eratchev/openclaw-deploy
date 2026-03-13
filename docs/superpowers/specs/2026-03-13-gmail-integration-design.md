@@ -259,6 +259,41 @@ setup-gmail:
 
 ---
 
+## Initial Deploy & Idempotency
+
+### First-time state (no token configured)
+
+`mail-proxy` starts without a token and must not crash or block other services:
+- If `GMAIL_TOKEN_ENCRYPTION_KEY` is unset **or** `/data/gmail_token.enc` does not exist: start in degraded mode
+- Poller disabled: logs `No Gmail token configured — poller disabled. Run make setup-gmail to configure.`
+- `/call` returns `{"error": "not_configured", "message": "Run make setup-gmail to configure Gmail access"}` for all operations
+- `/health` returns healthy — absent token is an expected pre-setup state, not a failure
+
+Token is provisioned out-of-band via `make setup-gmail` (OAuth requires a browser on a local machine — it cannot be part of an automated server-side deploy). `make deploy` does not set up Gmail; it only starts the base stack. Gmail is opt-in via `make setup-gmail` followed by `make up-mail`.
+
+### `make deploy` re-runs preserve Gmail config
+
+`scripts/setup.sh` rewrites `.env` on every run. It must preserve `GMAIL_TOKEN_ENCRYPTION_KEY` if already set (same pattern as `REDIS_PASSWORD`). Implementation: `GMAIL_TOKEN_ENCRYPTION_KEY=$(get_existing GMAIL_TOKEN_ENCRYPTION_KEY)` before the `.env` heredoc, included in the heredoc as `GMAIL_TOKEN_ENCRYPTION_KEY=${GMAIL_TOKEN_ENCRYPTION_KEY}`. Without this, re-running `make deploy` silently clears the key and breaks decryption.
+
+### `make setup-gmail` idempotency
+
+Running `make setup-gmail` a second time:
+- Always generates a **new** Fernet key (old encrypted token is unreadable with the new key — that's correct since we re-auth)
+- Always runs the OAuth browser flow and writes a fresh token
+- Overwrites `/data/gmail_token.enc` on the VPS
+- Replaces `GMAIL_TOKEN_ENCRYPTION_KEY` in `.env` (removes old line, appends new)
+- `openclaw approvals allowlist add` commands are safe to re-run (OpenClaw ignores duplicate entries)
+- `tools.exec.safeBins` config set is idempotent (always writes the same array)
+- Restarts `mail-proxy` to pick up the new key
+
+No special detection of existing config needed — the script is designed to fully replace credentials on every run.
+
+### `make up-mail` idempotency
+
+Safe to re-run at any time. `--build mail-proxy` rebuilds the image; `up -d` leaves other containers unchanged. Running `make up-mail` after `make up` is the standard workflow for adding mail support to a running stack.
+
+---
+
 ## Testing Strategy
 
 - **Unit:** Policy engine (rate limits, recipient cap, novel-domain block with sorted-set TTL behavior, confirmation for `send`, Redis-unavailable fail-closed)
