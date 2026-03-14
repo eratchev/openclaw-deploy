@@ -103,7 +103,7 @@ OpenClaw can read and write your Google Calendar via an MCP proxy that runs on t
 make setup-gcal CLIENT_SECRET=path/to/client_secret.json
 ```
 
-This generates a Fernet encryption key, runs the Google OAuth browser flow, encrypts the token, copies it to the VPS, updates `.env`, and restarts the calendar-proxy. Requires `client_secret.json` from Google Cloud Console.
+This generates a Fernet encryption key, runs the Google OAuth browser flow, encrypts the token, copies it to the VPS, updates `.env`, and restarts the calendar-proxy. Requires `client_secret.json` from Google Cloud Console (see below).
 
 **Additional `.env` vars (add via `make deploy` or manually):**
 
@@ -137,7 +137,7 @@ make setup-gmail CLIENT_SECRET=path/to/client_secret.json
 
 This generates a Fernet encryption key, runs the Google OAuth browser flow (requesting `gmail.readonly`, `gmail.send`, `gmail.modify`), encrypts the token, copies it to the VPS, updates `.env`, registers the `gmail` CLI on the exec approvals allowlist, and starts the service.
 
-Requires `client_secret.json` from Google Cloud Console (same project as Calendar if using both).
+Requires `client_secret.json` from Google Cloud Console (same project as Calendar if using both — see below).
 
 **Start:**
 
@@ -169,6 +169,22 @@ make setup-gmail CLIENT_SECRET=path/to/client_secret.json
 Safe to re-run — generates a fresh key and token.
 
 See [docs/superpowers/specs/2026-03-13-gmail-integration-design.md](docs/superpowers/specs/2026-03-13-gmail-integration-design.md) for architecture details.
+
+### Getting `client_secret.json`
+
+Both Calendar and Gmail integrations use the same Google Cloud OAuth flow:
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project (or reuse one).
+2. Enable the API(s) you need: **APIs & Services → Library**
+   - For Calendar: enable **Google Calendar API**
+   - For Gmail: enable **Gmail API**
+3. Create credentials: **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+   - Application type: **Desktop app**
+   - Name: anything (e.g. `openclaw`)
+4. Download the JSON — that is your `client_secret.json`.
+5. Add your Google account as a test user: **OAuth consent screen → Test users → Add**.
+
+You can reuse the same project and the same `client_secret.json` for both Calendar and Gmail.
 
 ### Voice Transcription *(optional)*
 
