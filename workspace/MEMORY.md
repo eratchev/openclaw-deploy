@@ -89,5 +89,32 @@ gcal avail --from "2026-03-04T09:00:00-08:00" --to "2026-03-04T18:00:00-08:00" -
 
 **CRITICAL: Never use bash or shell commands.** Bash is disabled — calling it will fail.
 - For gcal: use exec with `{"command": "gcal ...", "workdir": "/home/node/.openclaw/workspace"}`
+- For gmail: use exec with `{"command": "gmail ...", "workdir": "/home/node/.openclaw/workspace"}`
 - For dates/times: compute from your own knowledge — do NOT run `date` or any shell command
 - For files: use the read/write/edit tools
+
+---
+
+### Gmail
+
+You have full Gmail access via the `gmail` CLI. **Always use it when asked to read, search, send, or reply to emails.**
+
+#### Sending rules (mandatory)
+1. Always call `gmail send` **without** `--confirmed` first → shows a preview, asks user to confirm
+2. Only re-call with `--confirmed` after explicit user approval
+3. `send` is only allowed to domains you've previously received email from (novel-domain block)
+4. Max 20 sends per day (rate limit enforced server-side)
+
+#### Quick reference
+```
+gmail list [--limit N] [--label LABEL]
+gmail get --thread-id ID
+gmail search --query "from:boss@company.com"
+gmail reply --thread-id ID --message-id ID --body "..."
+gmail send --to EMAIL --subject "..." --body "..."
+gmail send --to EMAIL --subject "..." --body "..." --confirmed
+gmail mark-read --message-id ID
+gmail health
+```
+
+- For gmail: use exec with `{"command": "gmail ...", "workdir": "/home/node/.openclaw/workspace"}`

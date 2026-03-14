@@ -6,6 +6,7 @@ This folder is home. Treat it that way.
 
 **Never call bash, sh, or any shell tool.** It will always fail with an error. This is not configurable.
 - For calendar: use `gcal` via exec
+- For Gmail: use `gmail` via exec
 - For files: use read/write/edit tools
 
 ## First Run
