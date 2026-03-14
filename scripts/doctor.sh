@@ -85,6 +85,7 @@ check_service caddy
 check_service redis
 check_service voice-proxy  true
 check_service calendar-proxy true
+check_service mail-proxy true
 
 # ── Connectivity ───────────────────────────────────────────────────────────────
 
@@ -146,6 +147,27 @@ if sudo docker compose exec -T openclaw test -f /home/node/.openclaw/gcal_token.
     pass "gcal_token.enc  present"
 else
     skip "gcal_token.enc  not configured  →  see docs/plans/2026-03-03-google-calendar.md"
+fi
+
+# ── Gmail ──────────────────────────────────────────────────────────────────────
+
+echo ""
+echo " Gmail"
+
+if [ -n "${GMAIL_TOKEN_ENCRYPTION_KEY:-}" ]; then
+    pass "GMAIL_TOKEN_ENCRYPTION_KEY  set"
+    mail_health=$(sudo docker compose --profile mail exec -T mail-proxy python3 -c \
+        "import urllib.request; import json; r=urllib.request.urlopen('http://localhost:8091/health',timeout=3); print(json.load(r)['configured'])" \
+        2>/dev/null || echo "")
+    if [ "$mail_health" = "True" ]; then
+        pass "mail-proxy  /health → configured"
+    elif sudo docker compose ps --format '{{.Name}}' 2>/dev/null | grep -q "mail-proxy"; then
+        warn "mail-proxy  running but /health unreachable"
+    else
+        skip "mail-proxy  not started  →  run: make up-mail"
+    fi
+else
+    skip "Gmail  not configured  →  run: make setup-gmail CLIENT_SECRET=..."
 fi
 
 # ── Backups ────────────────────────────────────────────────────────────────────
