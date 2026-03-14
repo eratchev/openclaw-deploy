@@ -4,7 +4,7 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 # Load HOST from .deploy file written by 'make deploy'
 -include .deploy
 
-.PHONY: up up-calendar up-voice down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress setup-inbound setup-gcal deploy-workspace deploy doctor pair-whatsapp
+.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress setup-inbound setup-gcal setup-gmail deploy-workspace deploy doctor pair-whatsapp
 
 # Start all services (caddy, openclaw, redis, voice-proxy).
 up:
@@ -18,6 +18,11 @@ up-calendar:
 up-voice:
 	docker compose up -d --build voice-proxy
 	@echo "Voice proxy rebuilt and started."
+
+# Start all services + Gmail proxy (rebuilds mail-proxy image)
+up-mail:
+	docker compose --profile mail up -d --build mail-proxy
+	@echo "Gmail proxy rebuilt and started."
 
 # Stop all services
 down:
@@ -137,6 +142,13 @@ setup-gcal:
 	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
 	@[ -n "$(CLIENT_SECRET)" ] || (echo "Usage: make setup-gcal CLIENT_SECRET=path/to/client_secret.json" && exit 1)
 	@bash scripts/setup-gcal.sh "$(HOST)" "$(CLIENT_SECRET)"
+
+# Set up Gmail OAuth and exec approvals (run locally on Mac, requires client_secret.json)
+# Usage: make setup-gmail CLIENT_SECRET=path/to/client_secret.json
+setup-gmail:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	@[ -n "$(CLIENT_SECRET)" ] || (echo "Usage: make setup-gmail CLIENT_SECRET=path/to/client_secret.json" && exit 1)
+	@bash scripts/setup-gmail.sh "$(HOST)" "$(CLIENT_SECRET)"
 
 # Pair WhatsApp interactively (renders QR code in your terminal)
 pair-whatsapp:
