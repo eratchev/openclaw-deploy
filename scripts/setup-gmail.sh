@@ -77,6 +77,7 @@ ssh "$HOST" "cd ~/openclaw-deploy && \
     sudo docker compose exec -T openclaw openclaw approvals allowlist add 'gmail' --agent main --gateway && \
     sudo docker compose exec -T openclaw openclaw approvals allowlist add 'gmail *' --agent main --gateway && \
     sudo docker compose exec -T openclaw openclaw config set tools.exec.safeBins '[\"gcal\",\"date\",\"ai\",\"gmail\"]' && \
+    sudo docker compose exec -T openclaw openclaw config set tools.exec.safeBinProfiles.gmail '{}' && \
     sudo docker compose restart openclaw"
 ok "gmail CLI registered on allowlist"
 
