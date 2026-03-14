@@ -125,6 +125,51 @@ This configures the `gcal` and `date` binaries on the exec allowlist so the agen
 
 See [docs/calendar-proxy.md](docs/calendar-proxy.md) for tuning, health checks, and troubleshooting.
 
+## Gmail Integration *(optional)*
+
+OpenClaw can read, search, and reply to Gmail, and proactively notifies you via Telegram when important emails arrive (scored by Claude AI).
+
+**One-time setup (local machine):**
+
+```bash
+make setup-gmail CLIENT_SECRET=path/to/client_secret.json
+```
+
+This generates a Fernet encryption key, runs the Google OAuth browser flow (requesting `gmail.readonly`, `gmail.send`, `gmail.modify`), encrypts the token, copies it to the VPS, updates `.env`, registers the `gmail` CLI on the exec approvals allowlist, and starts the service.
+
+Requires `client_secret.json` from Google Cloud Console (same project as Calendar if using both).
+
+**Start:**
+
+```bash
+make up-mail
+```
+
+**Available agent commands:**
+
+| Command | Description |
+|---|---|
+| `gmail list` | Show unread inbox (up to 10) |
+| `gmail get --thread-id ID` | Fetch full thread |
+| `gmail search --query "..."` | Gmail query syntax |
+| `gmail reply --thread-id ID --message-id ID --body "..."` | Reply to thread |
+| `gmail send --to EMAIL --subject "..." --body "..." --confirmed` | Send new email |
+| `gmail mark-read --message-id ID` | Mark as read |
+
+**Proactive notifications:**
+
+When new emails arrive, the agent scores them for importance using Claude and sends a Telegram summary for anything scoring ≥ 7 (configurable via `GMAIL_IMPORTANCE_THRESHOLD`). Requires `ALERT_TELEGRAM_CHAT_ID` in `.env`.
+
+**Re-auth (if token expires):**
+
+```bash
+make setup-gmail CLIENT_SECRET=path/to/client_secret.json
+```
+
+Safe to re-run — generates a fresh key and token.
+
+See [docs/superpowers/specs/2026-03-13-gmail-integration-design.md](docs/superpowers/specs/2026-03-13-gmail-integration-design.md) for architecture details.
+
 ### Voice Transcription *(optional)*
 
 Automatically transcribes Telegram voice notes via OpenAI Whisper so you can speak to OpenClaw hands-free.
