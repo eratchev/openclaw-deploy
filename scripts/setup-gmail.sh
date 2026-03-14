@@ -62,7 +62,15 @@ step "Updating GMAIL_TOKEN_ENCRYPTION_KEY in .env"
 ssh "$HOST" "sed -i '/^GMAIL_TOKEN_ENCRYPTION_KEY=/d' ~/openclaw-deploy/.env && echo 'GMAIL_TOKEN_ENCRYPTION_KEY=$KEY' >> ~/openclaw-deploy/.env"
 ok "Key written to .env"
 
-# ── Step 6: Register gmail CLI on exec approvals allowlist ────────────────────
+# ── Step 6: Install gmail CLI into openclaw container ────────────────────────
+step "Installing gmail CLI into openclaw container"
+scp "$REPO_DIR/services/mail-proxy/scripts/gmail" "$HOST:/tmp/gmail"
+ssh "$HOST" "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml cp /tmp/gmail openclaw:/home/node/.openclaw/bin/gmail \
+    && sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw chmod +x /home/node/.openclaw/bin/gmail \
+    && rm -f /tmp/gmail"
+ok "gmail CLI installed at /home/node/.openclaw/bin/gmail"
+
+# ── Step 7: Register gmail CLI on exec approvals allowlist ────────────────────
 step "Registering gmail CLI on exec approvals allowlist"
 ssh "$HOST" "cd ~/openclaw-deploy && \
     sudo docker compose exec -T openclaw openclaw approvals allowlist add '/home/node/.openclaw/bin/gmail' --agent main --gateway && \
@@ -72,7 +80,7 @@ ssh "$HOST" "cd ~/openclaw-deploy && \
     sudo docker compose restart openclaw"
 ok "gmail CLI registered on allowlist"
 
-# ── Step 7: Pull latest code + start mail-proxy ───────────────────────────────
+# ── Step 8: Pull latest code + start mail-proxy ───────────────────────────────
 step "Pulling latest code on VPS"
 ssh "$HOST" "cd ~/openclaw-deploy && git pull --ff-only"
 ok "Code updated"
