@@ -72,7 +72,11 @@ ssh "$HOST" "cd ~/openclaw-deploy && \
     sudo docker compose restart openclaw"
 ok "gmail CLI registered on allowlist"
 
-# ── Step 7: Start mail-proxy (or restart if already running) ──────────────────
+# ── Step 7: Pull latest code + start mail-proxy ───────────────────────────────
+step "Pulling latest code on VPS"
+ssh "$HOST" "cd ~/openclaw-deploy && git pull --ff-only"
+ok "Code updated"
+
 step "Starting mail-proxy"
 ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose --profile mail up -d --build mail-proxy"
 ok "mail-proxy started"
