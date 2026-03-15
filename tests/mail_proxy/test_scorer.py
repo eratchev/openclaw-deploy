@@ -93,6 +93,24 @@ def test_score_skips_when_circuit_open():
     assert circuit_open is True
 
 
+def test_call_api_handles_markdown_code_fence():
+    """Model sometimes wraps JSON in ```json ... ``` — must still parse correctly."""
+    import scorer
+    s = _make_scorer()
+    results = [{"message_id": "m1", "score": 8, "summary": "Important"}]
+    fenced = f"```json\n{json.dumps(results)}\n```"
+
+    content = MagicMock()
+    content.text = fenced
+    response = MagicMock()
+    response.content = [content]
+
+    s._client.messages.create = MagicMock(return_value=response)
+    parsed = s._call_api([{"message_id": "m1", "from_addr": "a@b.com",
+                           "subject": "s", "snippet": "sn"}])
+    assert parsed[0]["score"] == 8
+
+
 def test_call_api_builds_correct_prompt():
     import scorer
     s = _make_scorer()

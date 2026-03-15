@@ -1,7 +1,10 @@
 import json
+import logging
 import time
 
 import anthropic
+
+logger = logging.getLogger(__name__)
 
 
 class CircuitBreaker:
@@ -64,7 +67,9 @@ class ImportanceScorer:
             results = self._call_api(messages)
             self._breaker.record_success()
             return [r for r in results if r.get("score", 0) >= self._threshold], False
-        except Exception:
+        except Exception as exc:
+            logger.warning("ImportanceScorer failed (failures=%d): %s",
+                           self._breaker.failures + 1, exc)
             tripped = self._breaker.record_failure()
             return [], tripped
 
@@ -102,4 +107,8 @@ class ImportanceScorer:
             messages=[{"role": "user", "content": payload}],
         )
 
-        return json.loads(response.content[0].text)
+        text = response.content[0].text.strip()
+        # Strip markdown code fences if the model wrapped the JSON
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        return json.loads(text)
