@@ -2,6 +2,7 @@ import json
 import os
 import uuid
 import time
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -220,7 +221,48 @@ def get_health() -> dict:
             health["google_api"] = f"error: {e}"
     else:
         health["google_api"] = "skipped"
+    health["reminders_enabled"] = (
+        os.getenv("GCAL_DISABLE_REMINDERS", "false").lower() != "true"
+        and bool(os.getenv("TELEGRAM_TOKEN"))
+        and bool(os.getenv("ALERT_TELEGRAM_CHAT_ID"))
+    )
     return health
+
+
+def _start_reminders() -> None:
+    """Start background reminder thread if configured. No-op if disabled or Telegram not set."""
+    if os.getenv("GCAL_DISABLE_REMINDERS", "false").lower() == "true":
+        return
+    telegram_token = os.getenv("TELEGRAM_TOKEN", "")
+    chat_id = os.getenv("ALERT_TELEGRAM_CHAT_ID", "")
+    if not telegram_token or not chat_id:
+        print(
+            "[calendar-proxy] Reminders: TELEGRAM_TOKEN or ALERT_TELEGRAM_CHAT_ID not set — disabled",
+            flush=True,
+        )
+        return
+    from reminders import run_forever
+    lead_minutes = int(os.getenv("GCAL_REMINDER_LEAD_TIME_MINUTES", "15"))
+    poll_interval = int(os.getenv("GCAL_REMINDER_POLL_INTERVAL_SECONDS", "60"))
+    r = get_redis()
+    t = threading.Thread(
+        target=run_forever,
+        kwargs=dict(
+            build_service_fn=build_google_service,
+            r=r,
+            telegram_token=telegram_token,
+            chat_id=chat_id,
+            lead_minutes=lead_minutes,
+            poll_interval=poll_interval,
+            calendar_ids=list(_allowed_calendars()),
+        ),
+        daemon=True,
+    )
+    t.start()
+    print(
+        f"[calendar-proxy] Reminders: started (lead={lead_minutes}m, poll={poll_interval}s)",
+        flush=True,
+    )
 
 
 # ── MCP tool registrations ────────────────────────────────────────────────────
@@ -339,6 +381,8 @@ async def http_call(request: Request) -> JSONResponse:
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+
+_start_reminders()
 
 if __name__ == "__main__":
     mcp.run(transport="sse")
