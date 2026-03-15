@@ -142,6 +142,7 @@ BACKUP_S3_SECRET_KEY=$(get_existing BACKUP_S3_SECRET_KEY)
 BACKUP_S3_REGION=$(get_existing BACKUP_S3_REGION); BACKUP_S3_REGION=${BACKUP_S3_REGION:-hel1}
 BACKUP_RETAIN_DAYS=$(get_existing BACKUP_RETAIN_DAYS); BACKUP_RETAIN_DAYS=${BACKUP_RETAIN_DAYS:-7}
 ALERT_TELEGRAM_CHAT_ID=$(get_existing ALERT_TELEGRAM_CHAT_ID)
+TELEGRAM_ALLOWED_USER_IDS=$(get_existing TELEGRAM_ALLOWED_USER_IDS)
 GMAIL_TOKEN_ENCRYPTION_KEY=$(get_existing GMAIL_TOKEN_ENCRYPTION_KEY)
 
 [ -n "$OPENAI_API_KEY" ]          && _voice_hint=" [currently enabled]"   || _voice_hint=""
@@ -167,6 +168,14 @@ printf "  Enable Telegram alerts (guardrail kills, backup failures)?%s [y/N]: " 
 if [[ "${alerts_yn,,}" == "y" ]]; then
     echo "  Find your chat ID: message @userinfobot on Telegram" >&2
     ALERT_TELEGRAM_CHAT_ID=$(ask ALERT_TELEGRAM_CHAT_ID "Your Telegram chat ID")
+fi
+
+_allowlist_default="${TELEGRAM_ALLOWED_USER_IDS:-${ALERT_TELEGRAM_CHAT_ID}}"
+[ -n "$TELEGRAM_ALLOWED_USER_IDS" ] && _allowlist_hint=" [currently: $TELEGRAM_ALLOWED_USER_IDS]" || _allowlist_hint=""
+printf "  Restrict bot to specific Telegram user IDs? (recommended)?%s [Y/n]: " "$_allowlist_hint" >&2; read -r allowlist_yn
+if [[ "${allowlist_yn,,}" != "n" ]]; then
+    echo "  Comma-separated user IDs. For a personal bot, your chat ID = your user ID." >&2
+    TELEGRAM_ALLOWED_USER_IDS=$(ask TELEGRAM_ALLOWED_USER_IDS "Allowed Telegram user IDs" "$_allowlist_default")
 fi
 
 
@@ -202,6 +211,7 @@ BACKUP_S3_SECRET_KEY=${BACKUP_S3_SECRET_KEY}
 BACKUP_S3_REGION=${BACKUP_S3_REGION}
 BACKUP_RETAIN_DAYS=${BACKUP_RETAIN_DAYS}
 ALERT_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID}
+TELEGRAM_ALLOWED_USER_IDS=${TELEGRAM_ALLOWED_USER_IDS}
 GMAIL_TOKEN_ENCRYPTION_KEY=${GMAIL_TOKEN_ENCRYPTION_KEY}
 EOF
 ok ".env written"
