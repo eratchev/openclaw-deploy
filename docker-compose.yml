@@ -119,6 +119,11 @@ services:
       - GCAL_HEALTH_CHECK_GOOGLE=${GCAL_HEALTH_CHECK_GOOGLE:-false}
       - GCAL_TOKEN_ENCRYPTION_KEY=${GCAL_TOKEN_ENCRYPTION_KEY:-}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - ALERT_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID:-}
+      - GCAL_REMINDER_LEAD_TIME_MINUTES=${GCAL_REMINDER_LEAD_TIME_MINUTES:-15}
+      - GCAL_REMINDER_POLL_INTERVAL_SECONDS=${GCAL_REMINDER_POLL_INTERVAL_SECONDS:-60}
+      - GCAL_DISABLE_REMINDERS=${GCAL_DISABLE_REMINDERS:-false}
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
       interval: 30s
