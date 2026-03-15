@@ -224,6 +224,21 @@ COMPOSE_CMD="sudo docker compose"
 rsh "cd $REMOTE_DIR && $COMPOSE_CMD up -d --force-recreate --build"
 ok "Started stack"
 
+# ── Step 5b: Rebuild running optional profile services ────────────────────────
+step "Rebuilding running optional services"
+running_svcs=$(rsh "cd $REMOTE_DIR && $COMPOSE_CMD ps --format '{{.Service}}' 2>/dev/null" || echo "")
+for svc_info in "mail-proxy:mail" "calendar-proxy:calendar" "voice-proxy:voice"; do
+    svc="${svc_info%%:*}"
+    profile="${svc_info##*:}"
+    if echo "$running_svcs" | grep -qx "$svc"; then
+        if rsh "cd $REMOTE_DIR && $COMPOSE_CMD --profile $profile up -d --build $svc"; then
+            ok "Rebuilt $svc"
+        else
+            warn "Failed to rebuild $svc — run: make up-$profile"
+        fi
+    fi
+done
+
 # ── Step 6: Health wait ───────────────────────────────────────────────────────
 step "Waiting for services to become healthy (up to 90s)"
 
