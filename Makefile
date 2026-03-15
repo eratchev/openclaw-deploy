@@ -10,9 +10,10 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 up:
 	docker compose up -d
 
-# Start all services + Google Calendar proxy
+# Start all services + Google Calendar proxy (rebuilds calendar-proxy image)
 up-calendar:
-	docker compose --profile calendar up -d
+	docker compose --profile calendar up -d --build calendar-proxy
+	@echo "Calendar proxy rebuilt and started."
 
 # Force-rebuild voice-proxy (e.g. after code changes to services/voice-proxy)
 up-voice:
