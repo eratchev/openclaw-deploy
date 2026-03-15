@@ -35,6 +35,11 @@ WHISPER_TIMEOUT = 20.0
 FALLBACK_TEXT = "🎤 Voice message received but transcription failed."
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 
+_ALLOWED_IDS_RAW = os.environ.get("TELEGRAM_ALLOWED_USER_IDS", "")
+ALLOWED_USER_IDS: frozenset[int] = frozenset(
+    int(uid.strip()) for uid in _ALLOWED_IDS_RAW.split(",") if uid.strip()
+)
+
 TELEGRAM_API = "https://api.telegram.org"
 
 # ── Module-level singletons (initialised in on_startup) ────────────────────
@@ -54,6 +59,17 @@ def get_chat_id(update: dict) -> Optional[int]:
     """Return the chat ID from a Telegram update, or None."""
     msg = update.get("message") or update.get("edited_message") or {}
     return (msg.get("chat") or {}).get("id")
+
+
+def get_user_id(update: dict) -> Optional[int]:
+    """Return the sender user ID from a Telegram update, or None."""
+    msg = (
+        update.get("message")
+        or update.get("edited_message")
+        or update.get("callback_query")
+        or {}
+    )
+    return (msg.get("from") or {}).get("id")
 
 
 def mutate_update(update: dict, transcription: str) -> dict:
@@ -177,6 +193,14 @@ async def handle_request(request: web.Request) -> web.Response:
         update = json.loads(raw_body)
     except (json.JSONDecodeError, ValueError):
         return await forward_raw(raw_body, path, headers, OPENCLAW_UPSTREAM, _session)
+
+    # User allowlist — silently drop updates from unlisted senders.
+    # Return 200 to Telegram to prevent retries.
+    if ALLOWED_USER_IDS:
+        user_id = get_user_id(update)
+        if user_id not in ALLOWED_USER_IDS:
+            log.info("blocked update from user_id=%s (not in allowlist)", user_id)
+            return web.Response(status=200, text="ok")
 
     voice = detect_voice(update)
     if not voice:

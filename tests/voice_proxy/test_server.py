@@ -271,3 +271,89 @@ async def test_empty_webhook_secret_skips_auth(fake_redis):
             assert resp.status == 200
 
     assert len(forwarded) == 1
+
+
+def make_update_from_user(user_id, text="hello"):
+    return {
+        "update_id": 3,
+        "message": {
+            "chat": {"id": user_id},
+            "from": {"id": user_id},
+            "text": text,
+        },
+    }
+
+
+async def test_allowed_user_is_forwarded(fake_redis):
+    """Updates from an allowed user must be forwarded to openclaw."""
+    server = _server()
+    update = make_update_from_user(user_id=111)
+    raw_body = json.dumps(update).encode()
+    forwarded = []
+
+    async def mock_forward(body, path, headers, upstream, session):
+        forwarded.append(json.loads(body))
+        return aiohttp.web.Response(status=200, body=b"ok")
+
+    with patch.object(server, "_redis", fake_redis), \
+         patch.object(server, "_session", AsyncMock()), \
+         patch.object(server, "ALLOWED_USER_IDS", frozenset({111})), \
+         patch.object(server, "forward_raw", side_effect=mock_forward):
+        app = server.make_app()
+        app.on_startup.clear()
+        app.on_cleanup.clear()
+        async with TestClient(TestServer(app)) as client:
+            resp = await client.post("/", data=raw_body, headers={"Content-Type": "application/json"})
+            assert resp.status == 200
+
+    assert len(forwarded) == 1
+
+
+async def test_blocked_user_returns_200_and_not_forwarded(fake_redis):
+    """Updates from a user not in the allowlist must be silently dropped."""
+    server = _server()
+    update = make_update_from_user(user_id=999)
+    raw_body = json.dumps(update).encode()
+    forwarded = []
+
+    async def mock_forward(body, path, headers, upstream, session):
+        forwarded.append(body)
+        return aiohttp.web.Response(status=200, body=b"ok")
+
+    with patch.object(server, "_redis", fake_redis), \
+         patch.object(server, "_session", AsyncMock()), \
+         patch.object(server, "ALLOWED_USER_IDS", frozenset({111})), \
+         patch.object(server, "forward_raw", side_effect=mock_forward):
+        app = server.make_app()
+        app.on_startup.clear()
+        app.on_cleanup.clear()
+        async with TestClient(TestServer(app)) as client:
+            resp = await client.post("/", data=raw_body, headers={"Content-Type": "application/json"})
+            assert resp.status == 200
+
+    assert forwarded == []  # update was NOT forwarded to openclaw
+
+
+async def test_empty_allowlist_allows_all_users(fake_redis):
+    """When TELEGRAM_ALLOWED_USER_IDS is empty, all users are forwarded (backward compat)."""
+    server = _server()
+    update = make_update_from_user(user_id=42)
+    raw_body = json.dumps(update).encode()
+    forwarded = []
+
+    async def mock_forward(body, path, headers, upstream, session):
+        forwarded.append(body)
+        return aiohttp.web.Response(status=200, body=b"ok")
+
+    with patch.object(server, "_redis", fake_redis), \
+         patch.object(server, "_session", AsyncMock()), \
+         patch.object(server, "ALLOWED_USER_IDS", frozenset()), \
+         patch.object(server, "forward_raw", side_effect=mock_forward):
+        app = server.make_app()
+        app.on_startup.clear()
+        app.on_cleanup.clear()
+        async with TestClient(TestServer(app)) as client:
+            resp = await client.post("/", data=raw_body, headers={"Content-Type": "application/json"})
+            assert resp.status == 200
+
+    assert len(forwarded) == 1
