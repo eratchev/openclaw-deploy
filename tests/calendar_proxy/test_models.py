@@ -2,8 +2,14 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../services/calendar-proxy'))
 
 import pytest
+from datetime import datetime, timedelta, timezone
 from pydantic import ValidationError
 from models import CreateEventInput, UpdateEventInput, DeleteEventInput, RecurrenceRule
+
+
+def _future_date() -> str:
+    """Return a date string 2 days in the future (YYYY-MM-DD)."""
+    return (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
 
 
 # ── RecurrenceRule ────────────────────────────────────────────────────────────
@@ -77,24 +83,27 @@ def test_create_rejects_duration_over_max(monkeypatch):
         )
 
 def test_create_defaults_calendar_id():
+    d = _future_date()
     ev = CreateEventInput(
-        title="Test", start="2026-03-15T14:00:00+02:00",
-        end="2026-03-15T15:00:00+02:00", execution_mode="dry_run"
+        title="Test", start=f"{d}T14:00:00+02:00",
+        end=f"{d}T15:00:00+02:00", execution_mode="dry_run"
     )
     assert ev.calendar_id == "primary"
 
 def test_create_valid_event():
+    d = _future_date()
     ev = CreateEventInput(
-        title="Standup", start="2026-03-15T09:00:00+02:00",
-        end="2026-03-15T09:30:00+02:00", execution_mode="execute"
+        title="Standup", start=f"{d}T09:00:00+02:00",
+        end=f"{d}T09:30:00+02:00", execution_mode="execute"
     )
     assert ev.title == "Standup"
     assert ev.execution_mode == "execute"
 
 def test_create_valid_with_recurrence():
+    d = _future_date()
     ev = CreateEventInput(
-        title="Weekly sync", start="2026-03-15T10:00:00+02:00",
-        end="2026-03-15T11:00:00+02:00", execution_mode="dry_run",
+        title="Weekly sync", start=f"{d}T10:00:00+02:00",
+        end=f"{d}T11:00:00+02:00", execution_mode="dry_run",
         recurrence=RecurrenceRule(rrule="FREQ=WEEKLY;COUNT=4")
     )
     assert ev.recurrence.rrule == "FREQ=WEEKLY;COUNT=4"

@@ -7,8 +7,22 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../services/calen
 
 import pytest
 import fakeredis
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 from cryptography.fernet import Fernet
+
+
+def _future_date() -> str:
+    """Return a date string 2 days in the future (YYYY-MM-DD)."""
+    return (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
+
+
+def _future_saturday_date() -> str:
+    """Return the next Saturday's date (YYYY-MM-DD)."""
+    dt = datetime.now(timezone.utc) + timedelta(days=1)
+    while dt.weekday() != 5:  # 5=Saturday
+        dt += timedelta(days=1)
+    return dt.strftime("%Y-%m-%d")
 
 
 @pytest.fixture(autouse=True)
@@ -41,10 +55,11 @@ def test_smoke_create_dry_run_simple_event():
         mock_build.return_value = mock_service
 
         import server
+        d = _future_date()
         result = server.handle_create_event({
             "title": "Quick sync",
-            "start": "2026-03-16T10:00:00+00:00",
-            "end": "2026-03-16T10:30:00+00:00",
+            "start": f"{d}T10:00:00+00:00",
+            "end": f"{d}T10:30:00+00:00",
             "execution_mode": "dry_run",
         })
         assert result["status"] in ("dry_run", "safe_to_execute", "needs_confirmation")
@@ -58,10 +73,11 @@ def test_smoke_denied_outside_allowlist():
         mock_build.return_value = MagicMock()
 
         import server
+        d = _future_date()
         result = server.handle_create_event({
             "title": "Test",
-            "start": "2026-03-16T10:00:00+00:00",
-            "end": "2026-03-16T11:00:00+00:00",
+            "start": f"{d}T10:00:00+00:00",
+            "end": f"{d}T11:00:00+00:00",
             "execution_mode": "execute",
             "calendar_id": "notallowed@calendar.google.com",
         })
@@ -78,11 +94,11 @@ def test_smoke_needs_confirmation_weekend():
         mock_build.return_value = mock_service
 
         import server
-        # 2026-03-21 is Saturday
+        s = _future_saturday_date()
         result = server.handle_create_event({
             "title": "Weekend event",
-            "start": "2026-03-21T10:00:00+00:00",
-            "end": "2026-03-21T11:00:00+00:00",
+            "start": f"{s}T10:00:00+00:00",
+            "end": f"{s}T11:00:00+00:00",
             "execution_mode": "execute",
         })
         assert result["status"] == "needs_confirmation"

@@ -3,17 +3,34 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../services/calen
 
 import pytest
 from unittest.mock import MagicMock
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import pytz
 from policies import assess
 from models import CreateEventInput, ImpactModel, RecurrenceRule
 
 
+def _future_weekday_date() -> str:
+    """Return a weekday date at least 2 days in the future (YYYY-MM-DD)."""
+    dt = datetime.now(timezone.utc) + timedelta(days=2)
+    while dt.weekday() >= 5:  # 5=Sat, 6=Sun
+        dt += timedelta(days=1)
+    return dt.strftime("%Y-%m-%d")
+
+
+def _future_saturday_date() -> str:
+    """Return the next Saturday's date (YYYY-MM-DD)."""
+    dt = datetime.now(timezone.utc) + timedelta(days=1)
+    while dt.weekday() != 5:  # 5=Saturday
+        dt += timedelta(days=1)
+    return dt.strftime("%Y-%m-%d")
+
+
 def _make_input(**kwargs):
+    d = _future_weekday_date()
     defaults = dict(
         title="Test",
-        start="2026-03-16T10:00:00+02:00",  # Monday
-        end="2026-03-16T11:00:00+02:00",
+        start=f"{d}T10:00:00+02:00",
+        end=f"{d}T11:00:00+02:00",
         execution_mode="dry_run",
     )
     defaults.update(kwargs)
@@ -45,7 +62,8 @@ def test_outside_business_hours_early(monkeypatch):
     monkeypatch.setenv("GCAL_ALLOWED_START_HOUR", "8")
     monkeypatch.setenv("GCAL_ALLOWED_END_HOUR", "20")
     monkeypatch.setenv("GCAL_USER_TIMEZONE", "Europe/Helsinki")
-    inp = _make_input(start="2026-03-16T06:00:00+02:00", end="2026-03-16T07:00:00+02:00")
+    d = _future_weekday_date()
+    inp = _make_input(start=f"{d}T06:00:00+02:00", end=f"{d}T07:00:00+02:00")
     impact = assess(inp, list_events_fn=_no_conflicts)
     assert impact.outside_business_hours is True
 
@@ -54,15 +72,16 @@ def test_outside_business_hours_late(monkeypatch):
     monkeypatch.setenv("GCAL_ALLOWED_START_HOUR", "8")
     monkeypatch.setenv("GCAL_ALLOWED_END_HOUR", "20")
     monkeypatch.setenv("GCAL_USER_TIMEZONE", "Europe/Helsinki")
-    inp = _make_input(start="2026-03-16T21:00:00+02:00", end="2026-03-16T22:00:00+02:00")
+    d = _future_weekday_date()
+    inp = _make_input(start=f"{d}T21:00:00+02:00", end=f"{d}T22:00:00+02:00")
     impact = assess(inp, list_events_fn=_no_conflicts)
     assert impact.outside_business_hours is True
 
 
 def test_weekend_detection(monkeypatch):
     monkeypatch.setenv("GCAL_USER_TIMEZONE", "Europe/Helsinki")
-    # 2026-03-21 is a Saturday
-    inp = _make_input(start="2026-03-21T10:00:00+02:00", end="2026-03-21T11:00:00+02:00")
+    s = _future_saturday_date()
+    inp = _make_input(start=f"{s}T10:00:00+02:00", end=f"{s}T11:00:00+02:00")
     impact = assess(inp, list_events_fn=_no_conflicts)
     assert impact.is_weekend is True
 

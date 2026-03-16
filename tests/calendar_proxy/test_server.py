@@ -2,8 +2,14 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../services/calendar-proxy'))
 
 import pytest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 import fakeredis
+
+
+def _future_date() -> str:
+    """Return a date string 2 days in the future (YYYY-MM-DD)."""
+    return (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
 
 
 @pytest.fixture
@@ -37,10 +43,11 @@ def test_create_event_dry_run_returns_dry_run_status(monkeypatch, mock_env):
         mock_build.return_value = MagicMock()
 
         import server
+        d = _future_date()
         result = server.handle_create_event({
             "title": "Test",
-            "start": "2026-03-16T10:00:00+00:00",
-            "end": "2026-03-16T11:00:00+00:00",
+            "start": f"{d}T10:00:00+00:00",
+            "end": f"{d}T11:00:00+00:00",
             "execution_mode": "dry_run",
         })
         assert result["status"] in ("dry_run", "safe_to_execute", "needs_confirmation", "denied")

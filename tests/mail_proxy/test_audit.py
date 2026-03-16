@@ -34,17 +34,17 @@ def test_all_redacted_fields_suppressed(tmp_path):
         from_addr="b@example.com",
         status="ok",
         extra={
-            "subject": "S1",
-            "body": "B1",
-            "snippet": "SN1",
-            "text": "T1",
-            "content": "C1",
+            "subject": "XSECRET_SUBJECTX",
+            "body": "XSECRET_BODYX",
+            "snippet": "XSECRET_SNIPPETX",
+            "text": "XSECRET_TEXTX",
+            "content": "XSECRET_CONTENTX",
             "safe_field": "SAFE_VALUE",
         },
     )
     entry = json.loads((tmp_path / "audit.log").read_text().strip())
     raw = json.dumps(entry)
-    for secret in ("S1", "B1", "SN1", "T1", "C1"):
+    for secret in ("XSECRET_SUBJECTX", "XSECRET_BODYX", "XSECRET_SNIPPETX", "XSECRET_TEXTX", "XSECRET_CONTENTX"):
         assert secret not in raw
     assert entry.get("safe_field") == "SAFE_VALUE"
 
