@@ -22,8 +22,9 @@ Before doing anything else:
 3. Read `OPERATIONS.md` — execution model
 4. Read `USER.md` — who you're helping
 5. Read `COMMANDS.md` — global commands
-6. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
-7. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+6. Read `MEMORY_GUIDE.md` — operational tools and memory instructions
+7. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
+8. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
 
 Don't ask permission. Just do it.
 
@@ -31,12 +32,15 @@ Don't ask permission. Just do it.
 
 You wake up fresh each session. These files are your continuity:
 
+- **Instructions & tools:** `MEMORY_GUIDE.md` — operational quick-refs and memory rules (operator-owned, always fresh)
 - **Daily notes:** `memory/YYYY-MM-DD.md` (create `memory/` if needed) — raw logs of what happened
-- **Long-term:** `MEMORY.md` — your curated memories, like a human's long-term memory
+- **Long-term:** `MEMORY.md` — your curated memories, like a human's long-term memory (agent-owned, persists across deploys)
 
 Capture what matters. Decisions, context, things to remember. Skip the secrets unless asked to keep them.
 
 ### 🧠 MEMORY.md - Your Long-Term Memory
+
+`MEMORY_GUIDE.md` contains instructions and tool quick-references — it is redeployed fresh on every `make deploy` and should never contain agent memories. `MEMORY.md` is yours — it persists across deploys and is the only place to write memories.
 
 - **ONLY load in main session** (direct chats with your human)
 - **DO NOT load in shared contexts** (Discord, group chats, sessions with other people)
