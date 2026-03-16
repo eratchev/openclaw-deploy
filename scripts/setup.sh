@@ -283,7 +283,19 @@ step "Deploying workspace files"
 scp workspace/*.md "$HOST:/tmp/"
 for f in workspace/*.md; do
     fname=$(basename "$f")
-    rsh "cd $REMOTE_DIR && $COMPOSE_CMD cp /tmp/$fname openclaw:/home/node/.openclaw/workspace/$fname && rm -f /tmp/$fname"
+    if [ "$fname" = "MEMORY.md" ]; then
+        # Agent owns MEMORY.md after first deploy — only seed if absent.
+        # Wrapped in `if` due to set -euo pipefail: test -f returns non-zero when file is absent.
+        if rsh "cd $REMOTE_DIR && $COMPOSE_CMD exec -T openclaw test -f /home/node/.openclaw/workspace/MEMORY.md" 2>/dev/null; then
+            rsh "rm -f /tmp/MEMORY.md"
+            ok "MEMORY.md preserved (agent-owned)"
+        else
+            rsh "cd $REMOTE_DIR && $COMPOSE_CMD cp /tmp/MEMORY.md openclaw:/home/node/.openclaw/workspace/MEMORY.md && rm -f /tmp/MEMORY.md"
+            ok "MEMORY.md seeded (first deploy)"
+        fi
+    else
+        rsh "cd $REMOTE_DIR && $COMPOSE_CMD cp /tmp/$fname openclaw:/home/node/.openclaw/workspace/$fname && rm -f /tmp/$fname"
+    fi
 done
 ok "Workspace files deployed"
 
