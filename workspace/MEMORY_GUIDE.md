@@ -78,12 +78,12 @@ You have full Google Calendar access via the `gcal` CLI. **Always use it when as
 
 #### Quick reference
 ```
-gcal create --title "Dinner" --start "2026-03-04T20:00:00-08:00" --end "2026-03-04T21:00:00-08:00" --mode dry_run
-gcal create --title "Dinner" --start "2026-03-04T20:00:00-08:00" --end "2026-03-04T21:00:00-08:00" --mode execute --confirmed
-gcal list --from "2026-03-04T00:00:00Z" --to "2026-03-04T23:59:59Z"
+gcal create --title "Dinner" --start "YYYY-MM-DDTHH:MM:SS-08:00" --end "YYYY-MM-DDTHH:MM:SS-08:00" --mode dry_run
+gcal create --title "Dinner" --start "YYYY-MM-DDTHH:MM:SS-08:00" --end "YYYY-MM-DDTHH:MM:SS-08:00" --mode execute --confirmed
+gcal list --from "YYYY-MM-DDT00:00:00Z" --to "YYYY-MM-DDT23:59:59Z"
 gcal delete --event-id EVENT_ID --mode dry_run
 gcal delete --event-id EVENT_ID --mode execute --confirmed
-gcal avail --from "2026-03-04T09:00:00-08:00" --to "2026-03-04T18:00:00-08:00" --minutes 60
+gcal avail --from "YYYY-MM-DDTHH:MM:SS-08:00" --to "YYYY-MM-DDTHH:MM:SS-08:00" --minutes 60
 ```
 
 **Timezone:** Pacific Time (America/Los_Angeles). Use ISO 8601 offsets in all gcal commands.
@@ -105,6 +105,7 @@ You have full Gmail access via the `gmail` CLI. **Always use it when asked to re
 2. Only re-call with `--confirmed` after explicit user approval
 3. `send` is only allowed to domains you've previously received email from (novel-domain block)
 4. Max 20 sends per day (rate limit enforced server-side)
+5. `mark-read` and `reply` do not require confirmation — only `send` to external addresses does.
 
 #### Quick reference
 ```
@@ -117,5 +118,3 @@ gmail send --to EMAIL --subject "..." --body "..." --confirmed
 gmail mark-read --message-id ID
 gmail health
 ```
-
-- For gmail: use exec with `{"command": "gmail ...", "workdir": "/home/node/.openclaw/workspace"}`
