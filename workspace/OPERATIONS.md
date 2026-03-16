@@ -75,7 +75,7 @@ Do NOT persist:
 - emotional commentary
 - temporary context
 
-Prefer concise summaries. See MEMORY.md for full rules.
+Prefer concise summaries. See MEMORY_GUIDE.md for full rules.
 
 ---
 

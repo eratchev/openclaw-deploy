@@ -236,7 +236,8 @@ The `workspace/` directory contains the agent's instruction files. These are cop
 - `OPERATIONS.md` — execution model and tool usage
 - `USER.md` — who the agent is helping (preferences, context)
 - `COMMANDS.md` — global commands available in all sessions including groups
-- `MEMORY.md` — long-term memory, loaded in direct/DM sessions only (not shared in groups)
+- `MEMORY_GUIDE.md` — memory instructions and tool quick-references (operator-owned, redeployed on every `make deploy`)
+- `MEMORY.md` — agent-owned long-term memory, loaded in direct/DM sessions only; never overwritten after first deploy
 
 Edit the files locally, then deploy:
 
