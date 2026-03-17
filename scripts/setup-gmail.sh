@@ -70,16 +70,28 @@ ssh "$HOST" "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml cp /tmp
     && rm -f /tmp/gmail"
 ok "gmail CLI installed at /home/node/.openclaw/bin/gmail"
 
-# ── Step 7: Register gmail CLI on exec approvals allowlist ────────────────────
-step "Registering gmail CLI on exec approvals allowlist"
+# ── Step 6b: Install contacts CLI into openclaw container ─────────────────────
+step "Installing contacts CLI into openclaw container"
+scp "$REPO_DIR/services/mail-proxy/scripts/contacts" "$HOST:/tmp/contacts"
+ssh "$HOST" "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml cp /tmp/contacts openclaw:/home/node/.openclaw/bin/contacts \
+    && sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw chmod +x /home/node/.openclaw/bin/contacts \
+    && rm -f /tmp/contacts"
+ok "contacts CLI installed at /home/node/.openclaw/bin/contacts"
+
+# ── Step 7: Register gmail + contacts CLIs on exec approvals allowlist ─────────
+step "Registering gmail + contacts CLIs on exec approvals allowlist"
 ssh "$HOST" "cd ~/openclaw-deploy && \
     sudo docker compose exec -T openclaw openclaw approvals allowlist add '/home/node/.openclaw/bin/gmail' --agent main --gateway && \
     sudo docker compose exec -T openclaw openclaw approvals allowlist add 'gmail' --agent main --gateway && \
     sudo docker compose exec -T openclaw openclaw approvals allowlist add 'gmail *' --agent main --gateway && \
-    sudo docker compose exec -T openclaw openclaw config set tools.exec.safeBins '[\"gcal\",\"date\",\"ai\",\"gmail\"]' && \
+    sudo docker compose exec -T openclaw openclaw approvals allowlist add '/home/node/.openclaw/bin/contacts' --agent main --gateway && \
+    sudo docker compose exec -T openclaw openclaw approvals allowlist add 'contacts' --agent main --gateway && \
+    sudo docker compose exec -T openclaw openclaw approvals allowlist add 'contacts *' --agent main --gateway && \
+    sudo docker compose exec -T openclaw openclaw config set tools.exec.safeBins '[\"gcal\",\"date\",\"ai\",\"gmail\",\"contacts\"]' && \
     sudo docker compose exec -T openclaw openclaw config set tools.exec.safeBinProfiles.gmail '{}' && \
+    sudo docker compose exec -T openclaw openclaw config set tools.exec.safeBinProfiles.contacts '{}' && \
     sudo docker compose restart openclaw"
-ok "gmail CLI registered on allowlist"
+ok "gmail + contacts CLIs registered on allowlist"
 
 # ── Step 8: Pull latest code + start mail-proxy ───────────────────────────────
 step "Pulling latest code on VPS"
