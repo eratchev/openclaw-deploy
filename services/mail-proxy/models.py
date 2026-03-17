@@ -1,6 +1,6 @@
 import re
 from typing import Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -95,3 +95,15 @@ class PolicyResult(BaseModel):
     allowed: bool
     reason: Optional[str] = None
     needs_confirmation: bool = False
+
+
+class ContactsLookupInput(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    limit: int = 5
+
+    @field_validator("limit")
+    @classmethod
+    def check_limit(cls, v: int) -> int:
+        if not (1 <= v <= 10):
+            raise ValueError("limit must be between 1 and 10")
+        return v

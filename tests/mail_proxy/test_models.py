@@ -66,3 +66,39 @@ def test_search_input_rejects_large_limit():
     import models
     with pytest.raises(Exception):
         models.SearchInput(query="test", limit=200)
+
+
+def test_contacts_lookup_input_defaults():
+    import models
+    m = models.ContactsLookupInput(name="Alice")
+    assert m.limit == 5
+
+
+def test_contacts_lookup_input_rejects_empty_name():
+    import models
+    with pytest.raises(Exception):
+        models.ContactsLookupInput(name="")
+
+
+def test_contacts_lookup_input_rejects_name_over_200_chars():
+    import models
+    with pytest.raises(Exception):
+        models.ContactsLookupInput(name="A" * 201)
+
+
+def test_contacts_lookup_input_rejects_limit_over_10():
+    import models
+    with pytest.raises(Exception):
+        models.ContactsLookupInput(name="Alice", limit=11)
+
+
+def test_contacts_lookup_input_rejects_limit_zero():
+    import models
+    with pytest.raises(Exception):
+        models.ContactsLookupInput(name="Alice", limit=0)
+
+
+def test_contacts_lookup_input_accepts_limit_10():
+    import models
+    m = models.ContactsLookupInput(name="Alice", limit=10)
+    assert m.limit == 10
