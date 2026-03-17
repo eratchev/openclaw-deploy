@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""contacts — CLI for the mail-proxy contacts lookup.
+
+Usage:
+  contacts lookup  --name "Alice" [--limit N]
+  contacts health
+"""
+import json
+import sys
+import urllib.request
+import urllib.error
+
+BASE_URL = "http://mail-proxy:8091"
+
+
+def _call(tool: str, args: dict) -> dict:
+    payload = json.dumps({"tool": tool, "args": args}).encode()
+    req = urllib.request.Request(
+        f"{BASE_URL}/call",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.load(resp)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        try:
+            return json.loads(body)
+        except Exception:
+            return {"error": f"HTTP {e.code}: {body}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _health() -> dict:
+    req = urllib.request.Request(f"{BASE_URL}/health", method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.load(resp)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _flag(args: list[str], flag: str, default=None):
+    try:
+        i = args.index(flag)
+        return args[i + 1]
+    except (ValueError, IndexError):
+        return default
+
+
+def main():
+    argv = sys.argv[1:]
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__)
+        sys.exit(0)
+
+    cmd = argv[0]
+    rest = argv[1:]
+
+    if cmd == "health":
+        result = _health()
+    elif cmd == "lookup":
+        name = _flag(rest, "--name")
+        if not name:
+            print("Error: --name is required", file=sys.stderr)
+            sys.exit(1)
+        args: dict = {"name": name}
+        if _flag(rest, "--limit"):
+            args["limit"] = int(_flag(rest, "--limit"))
+        result = _call("contacts_lookup", args)
+    else:
+        print(f"Unknown command: {cmd}", file=sys.stderr)
+        print(__doc__, file=sys.stderr)
+        sys.exit(1)
+
+    print(json.dumps(result, indent=2))
+    if isinstance(result, dict) and "error" in result:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
