@@ -48,7 +48,7 @@ Both return different response shapes. The function normalises them into the sam
 
 ```python
 class ContactsLookupInput(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=200)
     limit: int = 5
 
     @field_validator("limit")
@@ -142,6 +142,20 @@ contacts health
 
 ---
 
+## Audit Logging
+
+Every contacts lookup is written to the existing mail-proxy audit log (same `AuditLog` instance used by Gmail):
+
+```
+operation="contacts_lookup", query_length=<len(name)>, result_count=<N>, status="ok"|"error"
+```
+
+**What is NOT logged:** the actual `name` query, and the returned emails and phones. These are PII. The audit entry records only metadata — that a lookup happened, how long the query was, and how many results came back.
+
+The `contacts_lookup` tool handler must pass only `result_count` (not `matches`) to the audit log's `extra=` dict. Passing the full result dict would write emails and phones to disk unredacted — `_REDACTED_FIELDS` in `audit.py` does not cover `emails` or `phones`.
+
+---
+
 ## Out of Scope
 
 - Write operations (create/update contacts) — read-only is sufficient
@@ -165,7 +179,9 @@ contacts health
 - `contacts_lookup` returns matches
 - `contacts_lookup` with `--limit`
 - `ContactsLookupInput` rejects limit > 10
+- `ContactsLookupInput` rejects empty name and name > 200 chars
 - Not-configured response when token absent
 - 403 scope error surfaces as `{"error": "scope_missing"}`
+- Audit log entry contains `result_count` but not actual emails or phones
 
 `contacts` CLI binary and `setup-gmail.sh` scope change have no automated tests — verified manually.
