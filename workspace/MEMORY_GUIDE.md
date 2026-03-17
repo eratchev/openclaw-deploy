@@ -91,6 +91,7 @@ gcal avail --from "YYYY-MM-DDTHH:MM:SS-08:00" --to "YYYY-MM-DDTHH:MM:SS-08:00" -
 **CRITICAL: Never use bash or shell commands.** Bash is disabled — calling it will fail.
 - For gcal: use exec with `{"command": "gcal ...", "workdir": "/home/node/.openclaw/workspace"}`
 - For gmail: use exec with `{"command": "gmail ...", "workdir": "/home/node/.openclaw/workspace"}`
+- For contacts: use exec with `{"command": "contacts ...", "workdir": "/home/node/.openclaw/workspace"}`
 - For dates/times: compute from your own knowledge — do NOT run `date` or any shell command
 - For files: use the read/write/edit tools
 
@@ -117,4 +118,22 @@ gmail send --to EMAIL --subject "..." --body "..."
 gmail send --to EMAIL --subject "..." --body "..." --confirmed
 gmail mark-read --message-id ID
 gmail health
+```
+
+---
+
+### Contacts
+
+You have access to Google Contacts via the `contacts` CLI. **Always use it when you need to find someone's email address by name before sending mail.**
+
+#### Workflow
+1. Call `contacts lookup --name "..."` when you have a name but not an email
+2. If multiple matches, show them to the user and ask which to use
+3. Then proceed with `gmail send --to <resolved_email> ...`
+
+#### Quick reference
+```
+contacts lookup --name "Alice"
+contacts lookup --name "Smith" --limit 5
+contacts health
 ```
