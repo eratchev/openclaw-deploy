@@ -14,6 +14,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 import gmail_client
+import people_client
 import poller as poller_mod
 import policies
 import scorer as scorer_mod
@@ -21,6 +22,7 @@ from auth import TokenStore
 from audit import AuditLog
 from models import (
     ListInput, GetInput, SearchInput, ReplyInput, SendInput, MarkReadInput,
+    ContactsLookupInput,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -190,6 +192,44 @@ def handle_mark_read(args: dict) -> Any:
     return {"status": "ok", "message_id": inp.message_id}
 
 
+def handle_contacts_lookup(args: dict) -> Any:
+    if not CONFIGURED:
+        return _NOT_CONFIGURED_RESPONSE
+    inp = ContactsLookupInput(**args)
+    request_id = str(uuid.uuid4())
+    start = time.monotonic()
+    try:
+        service = people_client.build_service(token_store)
+        matches = people_client.search_contacts(service, query=inp.name, limit=inp.limit)
+        duration_ms = int((time.monotonic() - start) * 1000)
+        audit.write(
+            request_id=request_id,
+            operation="contacts_lookup",
+            message_id=None,
+            from_addr=None,
+            status="ok",
+            duration_ms=duration_ms,
+            extra={"query_length": len(inp.name), "result_count": len(matches)},
+        )
+        return {"matches": matches, "total": len(matches)}
+    except ValueError as exc:
+        duration_ms = int((time.monotonic() - start) * 1000)
+        is_scope_error = "scope not granted" in str(exc)
+        audit.write(
+            request_id=request_id,
+            operation="contacts_lookup",
+            message_id=None,
+            from_addr=None,
+            status="scope_missing" if is_scope_error else "error",
+            reason=str(exc),
+            duration_ms=duration_ms,
+            extra={"query_length": len(inp.name)},
+        )
+        if is_scope_error:
+            return {"error": "scope_missing", "message": str(exc)}
+        return {"error": str(exc)}
+
+
 def get_health() -> dict:
     health: dict[str, Any] = {"configured": CONFIGURED}
     try:
@@ -223,6 +263,7 @@ _TOOL_HANDLERS = {
     "reply": handle_reply,
     "send": handle_send,
     "mark_read": handle_mark_read,
+    "contacts_lookup": handle_contacts_lookup,
 }
 
 
