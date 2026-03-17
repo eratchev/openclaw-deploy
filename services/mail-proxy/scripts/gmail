@@ -96,6 +96,7 @@ def main():
         if not (thread_id and message_id and body):
             print("Error: --thread-id, --message-id, and --body are required", file=sys.stderr)
             sys.exit(1)
+        body = body.replace("\\n", "\n")
         result = _call("reply", {"thread_id": thread_id, "message_id": message_id, "body": body})
     elif cmd == "send":
         to = _flag(rest, "--to")
@@ -104,6 +105,7 @@ def main():
         if not (to and subject and body):
             print("Error: --to, --subject, and --body are required", file=sys.stderr)
             sys.exit(1)
+        body = body.replace("\\n", "\n")
         result = _call("send", {
             "to": to, "subject": subject, "body": body,
             "confirmed": "--confirmed" in rest,
