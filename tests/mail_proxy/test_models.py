@@ -86,6 +86,12 @@ def test_contacts_lookup_input_rejects_name_over_200_chars():
         models.ContactsLookupInput(name="A" * 201)
 
 
+def test_contacts_lookup_input_accepts_name_200_chars():
+    import models
+    m = models.ContactsLookupInput(name="A" * 200)
+    assert m.name == "A" * 200
+
+
 def test_contacts_lookup_input_rejects_limit_over_10():
     import models
     with pytest.raises(Exception):
