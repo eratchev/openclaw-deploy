@@ -16,14 +16,17 @@ Practical reference for deploying, operating, and recovering the openclaw-deploy
 
 The OpenClaw gateway is a Node.js process. On a 2 GB host it is safe, but **only if swap is configured** — without swap, a transient allocation spike will trigger a kernel OOM death spiral.
 
-### Node.js heap cap
+### Node.js heap and container memory
 
-`docker-compose.yml` passes `NODE_OPTIONS=--max-old-space-size=768` to the openclaw container by default, capping V8 heap at 768 MB. The gateway requires ~509 MB of heap at startup; 768 MB gives enough headroom for GC. On a 4 GB host you can raise it in `.env`:
+`docker-compose.yml` defaults to a 1536 MB V8 heap and a 2 GB container limit. Both are configurable in `.env` on the VPS — no need to edit `docker-compose.yml`:
 
 ```bash
-# .env on VPS (optional override)
-NODE_OPTIONS=--max-old-space-size=1536
+# .env on VPS (optional overrides)
+NODE_MEM_LIMIT=2g          # Docker container hard limit (default: 2g)
+NODE_OPTIONS=--max-old-space-size=1536   # V8 heap soft cap (default: 1536)
 ```
+
+Set `NODE_MEM_LIMIT` to roughly 50% of available RAM, leaving headroom for the OS and other containers. On a 2 GB host use `900m`; on a 4 GB host use `2g`. After editing `.env`, restart openclaw: `docker compose up -d --no-deps openclaw`.
 
 ### Add swap on a 2 GB VPS (one-time setup)
 
@@ -93,6 +96,16 @@ make doctor            # confirm healthy
 ```
 
 `make update` runs `docker compose pull openclaw && docker compose up -d --no-deps openclaw`. It does not restart other services.
+
+### Update CLI binaries only (gmail, contacts, gcal)
+
+After a code change to a CLI script in `services/*/scripts/`, push to git and run:
+
+```bash
+make deploy-clis       # copies updated binaries into openclaw container (~5s, no OAuth needed)
+```
+
+`make deploy` runs this automatically. Use `make deploy-clis` for targeted CLI-only fixes between full deploys.
 
 ---
 
@@ -262,11 +275,11 @@ git pull && docker compose up -d
 ps aux --sort=-%mem | head -10
 ```
 
-Key processes and normal RSS on a 2 GB host:
+Key processes and normal RSS on a 4 GB host:
 
 | Process | Normal RSS | Alarm if > |
 |---------|-----------|------------|
-| `openclaw-gatewa` | 500–700 MB | 1000 MB |
+| `openclaw-gatewa` | 800–1100 MB | 1600 MB |
 | `openclaw-logs` | 50–300 MB | 500 MB |
 | `python` (guardrail) | 40–70 MB | 150 MB |
 
