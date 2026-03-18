@@ -109,6 +109,57 @@ def test_create_valid_with_recurrence():
     assert ev.recurrence.rrule == "FREQ=WEEKLY;COUNT=4"
 
 
+# ── CreateEventInput — attendees ──────────────────────────────────────────────
+
+def _base_event(**kwargs):
+    d = _future_date()
+    defaults = dict(
+        title="Test",
+        start=f"{d}T10:00:00+00:00",
+        end=f"{d}T11:00:00+00:00",
+        execution_mode="dry_run",
+    )
+    defaults.update(kwargs)
+    return defaults
+
+
+def test_attendees_empty_by_default():
+    e = CreateEventInput(**_base_event())
+    assert e.attendees == []
+
+
+def test_attendees_valid_single():
+    e = CreateEventInput(**_base_event(attendees=["tim@example.com"]))
+    assert e.attendees == ["tim@example.com"]
+
+
+def test_attendees_valid_multiple():
+    addrs = [f"user{i}@example.com" for i in range(5)]
+    e = CreateEventInput(**_base_event(attendees=addrs))
+    assert len(e.attendees) == 5
+
+
+def test_attendees_rejects_invalid_email():
+    with pytest.raises(ValidationError, match="Invalid email"):
+        CreateEventInput(**_base_event(attendees=["not-an-email"]))
+
+
+def test_attendees_rejects_comma_separated():
+    with pytest.raises(ValidationError, match="single email"):
+        CreateEventInput(**_base_event(attendees=["a@b.com,c@d.com"]))
+
+
+def test_attendees_rejects_semicolon_separated():
+    with pytest.raises(ValidationError, match="single email"):
+        CreateEventInput(**_base_event(attendees=["a@b.com;c@d.com"]))
+
+
+def test_attendees_rejects_over_10():
+    addrs = [f"user{i}@example.com" for i in range(11)]
+    with pytest.raises(ValidationError):
+        CreateEventInput(**_base_event(attendees=addrs))
+
+
 # ── UpdateEventInput ──────────────────────────────────────────────────────────
 
 def test_update_requires_event_id():

@@ -2,7 +2,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, Optional
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def _max_recurrence_count() -> int:
@@ -13,6 +13,9 @@ def _max_event_hours() -> int:
 
 def _max_past_hours() -> int:
     return int(os.getenv("GCAL_MAX_PAST_HOURS", "1"))
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class RecurrenceRule(BaseModel):
@@ -54,6 +57,17 @@ class CreateEventInput(BaseModel):
     execution_mode: Literal["dry_run", "execute"]
     idempotency_key: Optional[str] = None
     confirmed: bool = False
+    attendees: list[str] = Field(default_factory=list, max_length=10)
+
+    @field_validator("attendees")
+    @classmethod
+    def validate_attendees(cls, v: list[str]) -> list[str]:
+        for addr in v:
+            if "," in addr or ";" in addr:
+                raise ValueError(f"Each attendee must be a single email address: {addr!r}")
+            if not _EMAIL_RE.match(addr):
+                raise ValueError(f"Invalid email address: {addr!r}")
+        return v
 
     @field_validator("start", "end")
     @classmethod
