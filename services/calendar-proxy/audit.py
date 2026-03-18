@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 TOOL_VERSION = "v1"
-_NEVER_LOG = {"token", "key", "secret", "password", "credential"}
+_NEVER_LOG = {"token", "key", "secret", "password", "credential", "attendees"}
 
 _DEFAULT_LOG_PATH = Path("/data/calendar-audit.log")
 _DEFAULT_MAX_BYTES = int(os.getenv("GCAL_AUDIT_MAX_MB", "50")) * 1024 * 1024

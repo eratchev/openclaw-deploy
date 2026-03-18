@@ -12,6 +12,17 @@ def _future_date() -> str:
     return (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
 
 
+def test_attendees_scrubbed_from_audit_args():
+    """_scrub_args must strip attendee email addresses."""
+    import importlib
+    import audit as audit_mod
+    importlib.reload(audit_mod)
+    args = {"title": "Beers", "attendees": ["tim@example.com"], "confirmed": True}
+    scrubbed = audit_mod._scrub_args(args)
+    assert "attendees" not in scrubbed
+    assert scrubbed["title"] == "Beers"
+
+
 @pytest.fixture
 def mock_env(monkeypatch, tmp_path):
     """Set all required env vars and mock Redis + token store."""
