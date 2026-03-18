@@ -374,3 +374,62 @@ def test_kill_openclaw_no_alert_without_reason():
          patch.object(g, "_alert") as mock_alert:
         g.kill_openclaw()
     mock_alert.assert_not_called()
+
+
+# ── check_memory grace period ─────────────────────────────────────────────────
+
+def test_check_memory_skipped_during_grace_period():
+    """Memory check is a no-op while started_at is within the grace window."""
+    g = Guardrail()
+    g.started_at = time.time()  # just started
+    g.memory_grace_seconds = 120
+    with patch("builtins.open") as mock_open, \
+         patch.object(g, "kill_openclaw") as mock_kill:
+        g.check_memory()
+    mock_open.assert_not_called()
+    mock_kill.assert_not_called()
+
+
+def _cgroup_open(current_bytes, max_bytes):
+    """Return a side_effect for builtins.open that yields cgroup memory values."""
+    values = iter([f"{current_bytes}\n", f"{max_bytes}\n"])
+    def side_effect(name, *args, **kwargs):
+        m = MagicMock()
+        content = next(values)
+        m.__enter__ = lambda s: MagicMock(read=MagicMock(return_value=content))
+        m.__exit__ = MagicMock(return_value=False)
+        return m
+    return side_effect
+
+
+def test_check_memory_runs_after_grace_period():
+    """Memory check executes once the grace window has elapsed."""
+    g = Guardrail()
+    g.started_at = time.time() - 200  # 200s ago, past 120s grace
+    g.memory_grace_seconds = 120
+    g.max_memory_pct = 90.0
+    # 50% usage — below threshold, so no kill
+    with patch("builtins.open", side_effect=_cgroup_open(536870912, 1073741824)), \
+         patch.object(g, "kill_openclaw") as mock_kill:
+        g.check_memory()
+    mock_kill.assert_not_called()
+
+
+def test_check_memory_kills_when_over_threshold_after_grace():
+    """Memory check kills the gateway when usage exceeds threshold after grace."""
+    g = Guardrail()
+    g.started_at = time.time() - 200  # past grace
+    g.memory_grace_seconds = 120
+    g.max_memory_pct = 90.0
+    # 97% of 1 GB limit
+    with patch("builtins.open", side_effect=_cgroup_open(1042284134, 1073741824)), \
+         patch.object(g, "kill_openclaw") as mock_kill:
+        g.check_memory()
+    mock_kill.assert_called_once()
+    assert "memory" in mock_kill.call_args[0][0]
+
+
+def test_check_memory_grace_default_is_120s():
+    """Default MEMORY_GRACE_SECONDS is 120."""
+    g = Guardrail()
+    assert g.memory_grace_seconds == 120

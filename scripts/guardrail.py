@@ -90,7 +90,9 @@ class Guardrail:
         self.max_llm_calls = int(os.getenv("MAX_LLM_CALLS", "30"))
         self.max_idle_seconds = int(os.getenv("MAX_IDLE_SECONDS", "60"))
         self.max_memory_pct = float(os.getenv("MAX_MEMORY_PCT", "90"))
+        self.memory_grace_seconds = int(os.getenv("MEMORY_GRACE_SECONDS", "120"))
         self.max_log_proc_seconds = int(os.getenv("MAX_LOG_PROC_SECONDS", "1800"))
+        self.started_at: float = 0.0  # set in run()
 
     # ── PID detection ─────────────────────────────────────────────────────────
 
@@ -278,7 +280,13 @@ class Guardrail:
     # ── Memory watchdog ───────────────────────────────────────────────────────
 
     def check_memory(self):
-        """Read container memory usage from cgroups (v2 then v1 fallback)."""
+        """Read container memory usage from cgroups (v2 then v1 fallback).
+
+        Skips the check during the startup grace window to avoid false kills
+        caused by the transient memory spike during Node.js / channel init.
+        """
+        if self.started_at and time.time() - self.started_at < self.memory_grace_seconds:
+            return
         try:
             with open("/sys/fs/cgroup/memory.current") as f:
                 current = int(f.read().strip())
@@ -367,9 +375,11 @@ class Guardrail:
             f"tool_calls={self.max_tool_calls} "
             f"idle={self.max_idle_seconds}s "
             f"memory={self.max_memory_pct}% "
+            f"memory_grace={self.memory_grace_seconds}s "
             f"log_proc_age={self.max_log_proc_seconds}s",
             flush=True,
         )
+        self.started_at = time.time()
         self.openclaw_pid = self.find_openclaw_pid()
 
         try:
