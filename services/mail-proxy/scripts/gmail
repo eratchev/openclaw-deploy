@@ -56,6 +56,11 @@ def _flag(args: list[str], flag: str, default=None):
         return default
 
 
+def _unescape_body(body: str) -> str:
+    """Normalize shell escape sequences agents emit in body text."""
+    return body.replace("\\n", "\n").replace("\\'", "'")
+
+
 def main():
     argv = sys.argv[1:]
     if not argv or argv[0] in ("-h", "--help"):
@@ -96,7 +101,7 @@ def main():
         if not (thread_id and message_id and body):
             print("Error: --thread-id, --message-id, and --body are required", file=sys.stderr)
             sys.exit(1)
-        body = body.replace("\\n", "\n")
+        body = _unescape_body(body)
         result = _call("reply", {"thread_id": thread_id, "message_id": message_id, "body": body})
     elif cmd == "send":
         to = _flag(rest, "--to")
@@ -105,7 +110,7 @@ def main():
         if not (to and subject and body):
             print("Error: --to, --subject, and --body are required", file=sys.stderr)
             sys.exit(1)
-        body = body.replace("\\n", "\n")
+        body = _unescape_body(body)
         result = _call("send", {
             "to": to, "subject": subject, "body": body,
             "confirmed": "--confirmed" in rest,
