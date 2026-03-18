@@ -4,7 +4,7 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 # Load HOST from .deploy file written by 'make deploy'
 -include .deploy
 
-.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress setup-inbound setup-gcal setup-gmail deploy-workspace deploy doctor pair-whatsapp
+.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress setup-inbound setup-gcal setup-gmail deploy-workspace deploy deploy-clis doctor pair-whatsapp
 
 # Start all services (caddy, openclaw, redis, voice-proxy).
 up:
@@ -124,6 +124,13 @@ kill-switch:
 	@echo "To resume: remove the file from the volume, then restart:"
 	@echo "  docker run --rm -v $(DATA_VOLUME):/data busybox rm -f /data/GUARDRAIL_DISABLE"
 	@echo "  make restart"
+
+# Push updated CLI binaries (gmail, contacts, gcal) into the openclaw container.
+# No OAuth re-run needed. Skips binaries that haven't been set up yet.
+# Usage: make deploy-clis  (requires HOST from .deploy or HOST=user@x.x.x.x)
+deploy-clis:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	@bash scripts/deploy-clis.sh "$(HOST)"
 
 # Deploy to a remote VPS from this local machine
 # Usage: make deploy HOST=user@x.x.x.x  (saved to .deploy for future targets)

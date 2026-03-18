@@ -145,6 +145,7 @@ ALERT_TELEGRAM_CHAT_ID=$(get_existing ALERT_TELEGRAM_CHAT_ID)
 TELEGRAM_ALLOWED_USER_IDS=$(get_existing TELEGRAM_ALLOWED_USER_IDS)
 GMAIL_TOKEN_ENCRYPTION_KEY=$(get_existing GMAIL_TOKEN_ENCRYPTION_KEY)
 GCAL_TOKEN_ENCRYPTION_KEY=$(get_existing GCAL_TOKEN_ENCRYPTION_KEY)
+NODE_MEM_LIMIT=$(get_existing NODE_MEM_LIMIT)
 
 [ -n "$OPENAI_API_KEY" ]          && _voice_hint=" [currently enabled]"   || _voice_hint=""
 [ -n "$BACKUP_S3_BUCKET" ]        && _backup_hint=" [currently: $BACKUP_S3_BUCKET]" || _backup_hint=""
@@ -215,6 +216,7 @@ ALERT_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID}
 TELEGRAM_ALLOWED_USER_IDS=${TELEGRAM_ALLOWED_USER_IDS}
 GMAIL_TOKEN_ENCRYPTION_KEY=${GMAIL_TOKEN_ENCRYPTION_KEY}
 GCAL_TOKEN_ENCRYPTION_KEY=${GCAL_TOKEN_ENCRYPTION_KEY}
+NODE_MEM_LIMIT=${NODE_MEM_LIMIT}
 EOF
 ok ".env written"
 
@@ -240,6 +242,15 @@ for svc_info in "mail-proxy:mail" "calendar-proxy:calendar" "voice-proxy:voice";
         fi
     fi
 done
+
+# ── Step 5c: Refresh CLI binaries ────────────────────────────────────────────
+step "Refreshing CLI binaries"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if bash "$SCRIPT_DIR/deploy-clis.sh" "$HOST"; then
+    ok "CLI binaries up to date"
+else
+    warn "CLI binary update failed — run: make deploy-clis"
+fi
 
 # ── Step 6: Health wait ───────────────────────────────────────────────────────
 step "Waiting for services to become healthy (up to 90s)"

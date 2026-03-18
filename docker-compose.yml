@@ -48,7 +48,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    mem_limit: 2g
+    mem_limit: ${NODE_MEM_LIMIT:-2g}
     cpus: 1.5
     pids_limit: 256
     restart: unless-stopped
