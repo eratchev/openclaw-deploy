@@ -158,3 +158,4 @@ def test_confirmed_bypasses_attendees_gate():
         has_attendees=True,
     )
     assert status == "safe_to_execute"
+    assert reason is None
