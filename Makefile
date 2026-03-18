@@ -4,7 +4,7 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 # Load HOST from .deploy file written by 'make deploy'
 -include .deploy
 
-.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-egress setup-inbound setup-gcal setup-gmail deploy-workspace deploy deploy-clis doctor pair-whatsapp
+.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-heartbeat setup-egress setup-inbound setup-gcal setup-gmail deploy-workspace deploy deploy-clis doctor pair-whatsapp
 
 # Start all services (caddy, openclaw, redis, voice-proxy).
 up:
@@ -87,6 +87,23 @@ open(p,'w').write(json.dumps(d,indent=2)); print('socket path fixed')"
 	docker compose exec openclaw openclaw config set tools.exec.safeBins '["gcal","date","ai"]'
 	docker compose restart openclaw
 	@echo "Exec approvals configured. Run 'make logs' to verify."
+
+# Configure heartbeat and morning cron (run once on existing deployment, or after reset)
+setup-heartbeat:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	ssh "$(HOST)" "cd ~/openclaw-deploy && \
+	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.every '30m' && \
+	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.target 'last' && \
+	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.directPolicy 'allow' && \
+	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.activeHours.start '09:00' && \
+	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.activeHours.end '22:00' && \
+	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.activeHours.timezone 'America/Los_Angeles' && \
+	  sudo docker compose exec -T openclaw openclaw cron add \
+	    --name 'Morning briefing' \
+	    --cron '0 9 * * * America/Los_Angeles' \
+	    --session isolated \
+	    --message 'Read MEMORY_GUIDE.md for tool documentation. Then run the morning briefing: check today full calendar schedule (gcal list for today) and important unread emails from overnight (gmail list --limit 10). Compose a concise summary — events today with times, any email action items — and send it to Evgueni via Telegram.' || true && \
+	  echo 'Heartbeat and cron configured.'"
 
 # Apply inbound firewall rules on VPS (run once after deploy, or to re-apply)
 setup-inbound:
