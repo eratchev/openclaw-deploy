@@ -129,3 +129,122 @@ def test_health_includes_reminders_enabled(monkeypatch, mock_env):
         assert "reminders_enabled" in health
         # mock_env sets GCAL_DISABLE_REMINDERS=true → must be False
         assert health["reminders_enabled"] is False
+
+
+def test_create_event_needs_confirmation_when_attendees_present(monkeypatch, mock_env):
+    """Unconfirmed create with attendees returns needs_confirmation."""
+    with patch("server.build_google_service") as mock_build, \
+         patch("server.get_redis") as mock_redis:
+        mock_redis.return_value = fakeredis.FakeRedis()
+        mock_build.return_value = MagicMock()
+
+        import server
+        d = _future_date()
+        result = server.handle_create_event({
+            "title": "Beers",
+            "start": f"{d}T17:00:00+00:00",
+            "end": f"{d}T18:00:00+00:00",
+            "execution_mode": "execute",
+            "attendees": ["tim@example.com"],
+        })
+
+    assert result["status"] == "needs_confirmation"
+    mock_build.return_value.events.return_value.insert.assert_not_called()
+
+
+def test_create_event_with_attendees_confirmed(monkeypatch, mock_env):
+    """Confirmed create with attendees calls API with attendees body and sendUpdates=all."""
+    with patch("server.build_google_service") as mock_build, \
+         patch("server.get_redis") as mock_redis:
+        mock_redis.return_value = fakeredis.FakeRedis()
+        mock_service = MagicMock()
+        mock_service.events.return_value.insert.return_value.execute.return_value = {"id": "ev123"}
+        mock_build.return_value = mock_service
+
+        import server
+        d = _future_date()
+        result = server.handle_create_event({
+            "title": "Beers",
+            "start": f"{d}T17:00:00+00:00",
+            "end": f"{d}T18:00:00+00:00",
+            "execution_mode": "execute",
+            "confirmed": True,
+            "attendees": ["tim@example.com"],
+        })
+
+    assert result["status"] == "safe_to_execute"
+    assert result["attendees_invited"] == 1
+    insert_kwargs = mock_service.events.return_value.insert.call_args.kwargs
+    assert insert_kwargs["sendUpdates"] == "all"
+    assert insert_kwargs["body"]["attendees"] == [{"email": "tim@example.com"}]
+
+
+def test_create_event_no_attendees_uses_send_updates_none(monkeypatch, mock_env):
+    """Events without attendees set sendUpdates=none."""
+    with patch("server.build_google_service") as mock_build, \
+         patch("server.get_redis") as mock_redis:
+        mock_redis.return_value = fakeredis.FakeRedis()
+        mock_service = MagicMock()
+        mock_service.events.return_value.insert.return_value.execute.return_value = {"id": "ev999"}
+        mock_build.return_value = mock_service
+
+        import server
+        d = _future_date()
+        result = server.handle_create_event({
+            "title": "Solo",
+            "start": f"{d}T10:00:00+00:00",
+            "end": f"{d}T11:00:00+00:00",
+            "execution_mode": "execute",
+            "confirmed": True,
+        })
+
+    assert result["status"] == "safe_to_execute"
+    insert_kwargs = mock_service.events.return_value.insert.call_args.kwargs
+    assert insert_kwargs["sendUpdates"] == "none"
+
+
+def test_create_event_dry_run_with_attendees(monkeypatch, mock_env):
+    """Dry run with attendees returns dry_run status, never calls API."""
+    with patch("server.build_google_service") as mock_build, \
+         patch("server.get_redis") as mock_redis:
+        mock_redis.return_value = fakeredis.FakeRedis()
+        mock_build.return_value = MagicMock()
+
+        import server
+        d = _future_date()
+        result = server.handle_create_event({
+            "title": "Beers",
+            "start": f"{d}T17:00:00+00:00",
+            "end": f"{d}T18:00:00+00:00",
+            "execution_mode": "dry_run",
+            "attendees": ["tim@example.com"],
+        })
+
+    assert result["status"] == "dry_run"
+    mock_build.return_value.events.return_value.insert.assert_not_called()
+
+
+def test_attendees_absent_from_audit_write_call(monkeypatch, mock_env):
+    """audit.write must not receive attendee emails in its args kwarg."""
+    with patch("server.build_google_service") as mock_build, \
+         patch("server.get_redis") as mock_redis, \
+         patch("server.audit") as mock_audit:
+        mock_redis.return_value = fakeredis.FakeRedis()
+        mock_service = MagicMock()
+        mock_service.events.return_value.insert.return_value.execute.return_value = {"id": "ev123"}
+        mock_build.return_value = mock_service
+
+        import server
+        d = _future_date()
+        result = server.handle_create_event({
+            "title": "Beers",
+            "start": f"{d}T17:00:00+00:00",
+            "end": f"{d}T18:00:00+00:00",
+            "execution_mode": "execute",
+            "confirmed": True,
+            "attendees": ["tim@example.com"],
+        })
+
+    assert result["attendees_invited"] == 1
+    for call in mock_audit.write.call_args_list:
+        assert "attendees" not in call.kwargs.get("args", {})

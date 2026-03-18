@@ -14,7 +14,7 @@ from google.auth.transport.requests import Request as GoogleAuthRequest
 from mcp.server.fastmcp import FastMCP
 
 from auth import TokenStore
-from audit import AuditLog
+from audit import AuditLog, _scrub_args
 from models import (
     CreateEventInput, DeleteEventInput,
     ListEventsInput, CheckAvailabilityInput,
@@ -118,6 +118,7 @@ def _run_write_pipeline(event_input, op: str, is_delete: bool = False):
         in_allowlist=in_allowlist,
         is_delete=is_delete,
         confirmed=confirmed,
+        has_attendees=bool(getattr(event_input, "attendees", [])),
     )
 
     duration_ms = int((time.monotonic() - start_ms) * 1000)
@@ -185,14 +186,25 @@ def handle_create_event(args: dict) -> dict:
         body["description"] = created_by
     if event_input.recurrence:
         body["recurrence"] = [f"RRULE:{event_input.recurrence.rrule}"]
-    created = service.events().insert(calendarId=event_input.calendar_id, body=body).execute()
+    if event_input.attendees:
+        body["attendees"] = [{"email": addr} for addr in event_input.attendees]
+    created = service.events().insert(
+        calendarId=event_input.calendar_id,
+        body=body,
+        sendUpdates="all" if event_input.attendees else "none",
+    ).execute()
     event_id = created["id"]
     idem_key = event_input.idempotency_key or idempotency_key_for("create", event_input.model_dump())
     record_idempotency(get_redis(), idem_key, event_id=event_id)
     request_id = str(uuid.uuid4())
     audit.write(request_id=request_id, tool="create_event", execution_mode="execute",
-                session_id="", args=event_input.model_dump(), status="created", event_id=event_id, duration_ms=0)
-    return {"request_id": request_id, "status": "safe_to_execute", "event_id": event_id}
+                session_id="", args=_scrub_args(event_input.model_dump()), status="created", event_id=event_id, duration_ms=0)
+    return {
+        "request_id": request_id,
+        "status": "safe_to_execute",
+        "event_id": event_id,
+        "attendees_invited": len(event_input.attendees),
+    }
 
 
 def handle_list_events(args: dict) -> list:
@@ -271,7 +283,8 @@ def _start_reminders() -> None:
 def create_event(title: str, start: str, end: str, execution_mode: str,
                  calendar_id: str = "primary", description: str = None,
                  recurrence_rrule: str = None, idempotency_key: str = None,
-                 confirmed: bool = False) -> dict:
+                 confirmed: bool = False,
+                 attendees: list[str] = None) -> dict:
     """Create a Google Calendar event."""
     args = {"title": title, "start": start, "end": end, "execution_mode": execution_mode,
             "calendar_id": calendar_id, "confirmed": confirmed}
@@ -282,6 +295,8 @@ def create_event(title: str, start: str, end: str, execution_mode: str,
         args["recurrence"] = RecurrenceRule(rrule=recurrence_rrule)
     if idempotency_key:
         args["idempotency_key"] = idempotency_key
+    if attendees:
+        args["attendees"] = attendees
     return handle_create_event(args)
 
 
