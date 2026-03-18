@@ -185,7 +185,7 @@ Default heartbeat prompt:
 
 **When to stay quiet (HEARTBEAT_OK):**
 
-- Late night (23:00-08:00) unless urgent
+- Outside active hours (22:00–09:00 PT) — suppressed by infrastructure; no heartbeats fire
 - Human is clearly busy
 - Nothing new since last check
 - You just checked <30 minutes ago
