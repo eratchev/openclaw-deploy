@@ -53,14 +53,14 @@ def enforce(
 ) -> tuple[str, str | None]:
 ```
 
-A new confirmation trigger added after the existing hard-denial checks and before the `if confirmed: return "safe_to_execute"` shortcut:
+A new confirmation trigger added after the existing hard-denial checks and after the `if confirmed: return "safe_to_execute"` shortcut — consistent with every other trigger in `enforce()`:
 
 ```python
 if has_attendees:
     return "needs_confirmation", "attendees_present"
 ```
 
-This runs before the `if confirmed: return "safe_to_execute"` shortcut — so when `has_attendees=True` and `confirmed=False`, the function returns `needs_confirmation`. When `confirmed=True`, the shortcut fires first and `has_attendees` has no effect. This preserves the existing pattern where all `needs_confirmation` paths flow through `_run_write_pipeline`, which handles audit logging and the `request_id`/`impact` response shape.
+When `confirmed=True`, the `if confirmed` shortcut fires first and `has_attendees` has no effect. When `confirmed=False` and `has_attendees=True`, the function returns `needs_confirmation`. This preserves the existing pattern where all `needs_confirmation` paths flow through `_run_write_pipeline`, which handles audit logging and the `request_id`/`impact` response shape.
 
 **`services/calendar-proxy/server.py`** — three changes:
 
