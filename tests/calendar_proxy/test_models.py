@@ -139,6 +139,12 @@ def test_attendees_valid_multiple():
     assert len(e.attendees) == 5
 
 
+def test_attendees_valid_max_10():
+    addrs = [f"user{i}@example.com" for i in range(10)]
+    e = CreateEventInput(**_base_event(attendees=addrs))
+    assert len(e.attendees) == 10
+
+
 def test_attendees_rejects_invalid_email():
     with pytest.raises(ValidationError, match="Invalid email"):
         CreateEventInput(**_base_event(attendees=["not-an-email"]))
