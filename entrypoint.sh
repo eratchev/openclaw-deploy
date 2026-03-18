@@ -32,6 +32,25 @@ if [ ! -f "$CONFIG_FILE" ]; then
         openclaw config set agents.main.provider anthropic || true
     fi
 
+    # ── Heartbeat ──────────────────────────────────────────────────────────────
+    # Runs every 30 min during active hours; agent reads HEARTBEAT.md for checklist
+    openclaw config set agents.defaults.heartbeat.every "30m"
+    openclaw config set agents.defaults.heartbeat.target "last"
+    openclaw config set agents.defaults.heartbeat.directPolicy "allow"
+    openclaw config set agents.defaults.heartbeat.activeHours.start "09:00"
+    openclaw config set agents.defaults.heartbeat.activeHours.end "22:00"
+    openclaw config set agents.defaults.heartbeat.activeHours.timezone "America/Los_Angeles"
+
+    # ── Morning cron ────────────────────────────────────────────────────────────
+    # || true: job persists in volume across restarts; guard prevents set -e from
+    # halting bootstrap if job already exists on a volume restored from backup
+    openclaw cron add \
+        --name "Morning briefing" \
+        --cron "0 9 * * * America/Los_Angeles" \
+        --session isolated \
+        --message "Read MEMORY_GUIDE.md for tool documentation. Then run the morning briefing: check today's full calendar schedule (gcal list for today) and important unread emails from overnight (gmail list --limit 10). Compose a concise summary — events today with times, any email action items — and send it to Evgueni via Telegram." \
+        || true
+
     echo "[entrypoint] Bootstrap complete. Starting gateway..."
 fi
 
