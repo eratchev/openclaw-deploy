@@ -43,12 +43,12 @@ services:
     env_file:
       - .env
     environment:
-      - NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=512}
+      - NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=1536}
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
-    mem_limit: 900m
+    mem_limit: 2g
     cpus: 1.5
     pids_limit: 256
     restart: unless-stopped
