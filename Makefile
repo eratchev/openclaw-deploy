@@ -101,7 +101,7 @@ setup-heartbeat:
 	  sudo docker compose exec -T openclaw openclaw cron add \
 	    --name 'Morning briefing' \
 	    --cron '0 9 * * *' \
-	    --timezone 'America/Los_Angeles' \
+	    --tz 'America/Los_Angeles' \
 	    --session isolated \
 	    --message 'Read MEMORY_GUIDE.md for tool documentation. Then run the morning briefing: check today full calendar schedule (gcal list for today) and important unread emails from overnight (gmail list --limit 10). Compose a concise summary — events today with times, any email action items — and send it to Evgueni via Telegram.' || true && \
 	  echo 'Heartbeat and cron configured.'"
