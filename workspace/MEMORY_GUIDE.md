@@ -76,10 +76,24 @@ You have full Google Calendar access via the `gcal` CLI. **Always use it when as
 3. If confirmed: re-run with `--mode execute --confirmed`
 4. If `safe_to_execute` on dry_run: run with `--mode execute --confirmed` directly
 
+#### Scheduling a meeting with someone
+
+When asked to schedule a meeting with a named person:
+
+1. `contacts lookup --name "..."` → resolve their email address
+   - Multiple matches: show all to user, ask which to use
+   - Zero matches: ask user to provide the email address directly
+   - Error (e.g. scope_missing): surface the error before proceeding
+2. `gcal create ... --attendee <email> --mode execute` → expect `needs_confirmation`
+3. Show user: "This will create the event and invite <email>. Confirm?"
+4. Re-run with `--confirmed` to send the invite
+
 #### Quick reference
 ```
 gcal create --title "Dinner" --start "YYYY-MM-DDTHH:MM:SS-08:00" --end "YYYY-MM-DDTHH:MM:SS-08:00" --mode dry_run
 gcal create --title "Dinner" --start "YYYY-MM-DDTHH:MM:SS-08:00" --end "YYYY-MM-DDTHH:MM:SS-08:00" --mode execute --confirmed
+gcal create --title "Beers" --start "..." --end "..." --attendee tim@example.com --mode execute
+gcal create --title "Team sync" --start "..." --end "..." --attendee a@b.com --attendee c@d.com --mode execute --confirmed
 gcal list --from "YYYY-MM-DDT00:00:00Z" --to "YYYY-MM-DDT23:59:59Z"
 gcal delete --event-id EVENT_ID --mode dry_run
 gcal delete --event-id EVENT_ID --mode execute --confirmed
