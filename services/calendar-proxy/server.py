@@ -14,7 +14,7 @@ from google.auth.transport.requests import Request as GoogleAuthRequest
 from mcp.server.fastmcp import FastMCP
 
 from auth import TokenStore
-from audit import AuditLog, _scrub_args
+from audit import AuditLog
 from models import (
     CreateEventInput, DeleteEventInput,
     ListEventsInput, CheckAvailabilityInput,
@@ -198,7 +198,7 @@ def handle_create_event(args: dict) -> dict:
     record_idempotency(get_redis(), idem_key, event_id=event_id)
     request_id = str(uuid.uuid4())
     audit.write(request_id=request_id, tool="create_event", execution_mode="execute",
-                session_id="", args=_scrub_args(event_input.model_dump()), status="created", event_id=event_id, duration_ms=0)
+                session_id="", args=event_input.model_dump(), status="created", event_id=event_id, duration_ms=0)
     return {
         "request_id": request_id,
         "status": "safe_to_execute",

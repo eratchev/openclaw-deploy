@@ -224,17 +224,24 @@ def test_create_event_dry_run_with_attendees(monkeypatch, mock_env):
     mock_build.return_value.events.return_value.insert.assert_not_called()
 
 
-def test_attendees_absent_from_audit_write_call(monkeypatch, mock_env):
-    """audit.write must not receive attendee emails in its args kwarg."""
+def test_attendees_absent_from_audit_write_call(monkeypatch, mock_env, tmp_path):
+    """AuditLog must not write attendee emails to the log file."""
+    import importlib
+    log_path = tmp_path / "audit.log"
+    monkeypatch.setenv("GCAL_AUDIT_LOG_PATH", str(log_path))
+
+    # Reload server so its module-level `audit` instance picks up the new log path.
+    # Patches are applied after reload so they target the freshly-created module.
+    import server
+    importlib.reload(server)
+
     with patch("server.build_google_service") as mock_build, \
-         patch("server.get_redis") as mock_redis, \
-         patch("server.audit") as mock_audit:
+         patch("server.get_redis") as mock_redis:
         mock_redis.return_value = fakeredis.FakeRedis()
         mock_service = MagicMock()
         mock_service.events.return_value.insert.return_value.execute.return_value = {"id": "ev123"}
         mock_build.return_value = mock_service
 
-        import server
         d = _future_date()
         result = server.handle_create_event({
             "title": "Beers",
@@ -246,5 +253,7 @@ def test_attendees_absent_from_audit_write_call(monkeypatch, mock_env):
         })
 
     assert result["attendees_invited"] == 1
-    for call in mock_audit.write.call_args_list:
-        assert "attendees" not in call.kwargs.get("args", {})
+    import json as _json
+    entries = [_json.loads(line) for line in log_path.read_text().strip().splitlines()]
+    for entry in entries:
+        assert "attendees" not in entry.get("args", {})
