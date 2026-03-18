@@ -134,8 +134,6 @@ When you receive a heartbeat poll (message matches the configured heartbeat prom
 Default heartbeat prompt:
 `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.`
 
-You are free to edit `HEARTBEAT.md` with a short checklist or reminders. Keep it small to limit token burn.
-
 ### Heartbeat vs Cron: When to Use Each
 
 **Use heartbeat when:**
@@ -170,9 +168,13 @@ You are free to edit `HEARTBEAT.md` with a short checklist or reminders. Keep it
     "email": 1703275200,
     "calendar": 1703260800,
     "weather": null
-  }
+  },
+  "notifiedThreadIds": ["<thread-id>", ...],
+  "notifiedEventIds": ["<event-id>", ...]
 }
 ```
+
+`notifiedThreadIds` and `notifiedEventIds` prevent repeat notifications. Keep each list to the 20 most recently added entries (drop from front when over 20).
 
 **When to reach out:**
 
