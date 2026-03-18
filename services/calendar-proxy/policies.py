@@ -114,6 +114,7 @@ def enforce(
     in_allowlist: bool,
     is_delete: bool = False,
     confirmed: bool = False,
+    has_attendees: bool = False,
 ) -> tuple[str, str | None]:
     """Phase 3: apply policy rules → (status, reason)."""
 
@@ -127,6 +128,9 @@ def enforce(
     # Confirmation required (skipped when caller has already confirmed)
     if confirmed:
         return "safe_to_execute", None
+
+    if has_attendees:
+        return "needs_confirmation", "attendees_present"
 
     if is_delete:
         return "needs_confirmation", None

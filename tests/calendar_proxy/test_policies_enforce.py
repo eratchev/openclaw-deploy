@@ -134,3 +134,27 @@ def test_safe_to_execute_personal_calendar_inside_hours():
                      outside_business_hours=False, is_weekend=False)
     status, reason = enforce(impact, calendar_id="primary", in_allowlist=True)
     assert status == "safe_to_execute"
+
+
+# ── Attendees ─────────────────────────────────────────────────────────────────
+
+def test_needs_confirmation_when_has_attendees():
+    status, reason = enforce(
+        _impact(),
+        calendar_id="primary",
+        in_allowlist=True,
+        has_attendees=True,
+    )
+    assert status == "needs_confirmation"
+    assert reason == "attendees_present"
+
+
+def test_confirmed_bypasses_attendees_gate():
+    status, reason = enforce(
+        _impact(),
+        calendar_id="primary",
+        in_allowlist=True,
+        confirmed=True,
+        has_attendees=True,
+    )
+    assert status == "safe_to_execute"
