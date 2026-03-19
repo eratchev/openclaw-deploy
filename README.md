@@ -291,8 +291,7 @@ The container has no browser, so tunnel port 8080 through SSH so the OAuth redir
 ```bash
 ssh -L 8080:localhost:8080 user@your-vps \
   "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -it openclaw \
-  /home/node/.openclaw/bin/spotify_player \
-  --config-folder /home/node/.openclaw/spotify-player"
+  /home/node/.openclaw/bin/spotify_player"
 ```
 
 `spotify_player` will print an auth URL. Open it in your local browser, approve the permissions, and the redirect to `127.0.0.1:8080` travels back through the tunnel to complete auth. The token is saved to the persistent volume — you only need to do this once.
