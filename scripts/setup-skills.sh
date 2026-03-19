@@ -140,25 +140,36 @@ install_spotify_player() {
     "
     ok "spotify_player.bin installed at $BIN_DIR/spotify_player.bin"
 
-    step "spotify-player: installing ALSA library into persistent volume"
-    # spotify_player is dynamically linked against libasound.so.2 (ALSA), which is not present
-    # in the container. Download the .deb from Ubuntu repos, extract the .so, copy it into the
-    # container's persistent volume so it survives restarts.
+    step "spotify-player: installing shared libraries into persistent volume"
+    # spotify_player is dynamically linked against ALSA and D-Bus, which are absent in the
+    # container. Download the .debs from Ubuntu repos, extract each .so, copy into the
+    # container's persistent volume (survives restarts).
+    # Mapping: pkg_name  soname  fallback_pkg
     ssh "$HOST" "
         set -euo pipefail
         TMPD=\$(mktemp -d)
         trap 'rm -rf \"\$TMPD\"' EXIT
         cd \"\$TMPD\"
-        apt-get download libasound2t64 2>/dev/null || apt-get download libasound2 2>/dev/null || \
-            { echo 'ERROR: apt-get download libasound2 failed — try: sudo apt-get update'; exit 1; }
-        DEB=\$(ls *.deb | head -1)
-        dpkg-deb -x \"\$DEB\" pkg
-        LIBFILE=\$(find pkg -name 'libasound.so.2*' -type f | head -1)
-        [ -n \"\$LIBFILE\" ] || { echo 'ERROR: libasound.so.2.* not found in package'; exit 1; }
         $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/lib
-        $COMPOSE cp \"\$LIBFILE\" openclaw:/home/node/.openclaw/lib/libasound.so.2
+
+        install_so() {
+            local pkg=\"\$1\" soname=\"\$2\" fallback=\"\${3:-}\"
+            apt-get download \"\$pkg\" 2>/dev/null \
+                || { [ -n \"\$fallback\" ] && apt-get download \"\$fallback\" 2>/dev/null; } \
+                || { echo \"ERROR: apt-get download \$pkg failed — try: sudo apt-get update\"; exit 1; }
+            DEB=\$(ls -t *.deb | head -1)
+            mkdir -p \"pkg_\$pkg\"
+            dpkg-deb -x \"\$DEB\" \"pkg_\$pkg\"
+            rm \"\$DEB\"
+            LIBFILE=\$(find \"pkg_\$pkg\" -name \"\${soname}*\" -type f | head -1)
+            [ -n \"\$LIBFILE\" ] || { echo \"ERROR: \$soname not found in \$pkg\"; exit 1; }
+            $COMPOSE cp \"\$LIBFILE\" openclaw:/home/node/.openclaw/lib/\$soname
+        }
+
+        install_so libasound2t64  libasound.so.2  libasound2
+        install_so libdbus-1-3    libdbus-1.so.3
     "
-    ok "libasound.so.2 installed in persistent volume"
+    ok "Shared libraries installed (libasound.so.2, libdbus-1.so.3)"
 
     step "spotify-player: creating LD_LIBRARY_PATH wrapper"
     # Install a wrapper script as spotify_player that sets LD_LIBRARY_PATH and bakes in
