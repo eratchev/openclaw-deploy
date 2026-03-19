@@ -122,11 +122,23 @@ install_session_logs() {
 }
 
 install_spotify_player() {
-    step "Installing spotify-player skill → spotify_player"
+    step "Installing spotify-player skill → spotify_player.bin"
     local url
     url=$(latest_gh_asset "aome510/spotify-player" "x86_64-unknown-linux-gnu.tar.gz")
     [ -n "$url" ] || fail "Could not find spotify_player release for x86_64-unknown-linux-gnu"
-    install_tarball_bin "spotify_player" "spotify_player" "$url"
+    # Install real binary directly as spotify_player.bin via docker cp — avoids a rename inside
+    # the container, which fails when docker cp creates the file owned by root.
+    ssh "$HOST" "
+        TMPD=\$(mktemp -d)
+        trap 'rm -rf \"\$TMPD\"' EXIT
+        curl -fsSL '$url' | tar -xz -C \"\$TMPD\"
+        BIN=\$(find \"\$TMPD\" -name 'spotify_player' -type f | head -1)
+        [ -n \"\$BIN\" ] || { echo 'ERROR: spotify_player binary not found in tarball'; exit 1; }
+        chmod +x \"\$BIN\"
+        $COMPOSE cp \"\$BIN\" openclaw:$BIN_DIR/spotify_player.bin
+        $COMPOSE exec -T openclaw chmod +x $BIN_DIR/spotify_player.bin
+    "
+    ok "spotify_player.bin installed at $BIN_DIR/spotify_player.bin"
 
     step "spotify-player: installing ALSA library into persistent volume"
     # spotify_player is dynamically linked against libasound.so.2 (ALSA), which is not present
@@ -149,9 +161,8 @@ install_spotify_player() {
     ok "libasound.so.2 installed in persistent volume"
 
     step "spotify-player: creating LD_LIBRARY_PATH wrapper"
-    # Rename the real binary to spotify_player.bin, then install a wrapper script as spotify_player
-    # that sets LD_LIBRARY_PATH and bakes in --config-folder. Encoded as base64 locally to avoid
-    # shell quoting issues across the ssh boundary.
+    # Install a wrapper script as spotify_player that sets LD_LIBRARY_PATH and bakes in
+    # --config-folder. Encoded as base64 locally to avoid shell quoting issues over ssh.
     local wrapper_b64
     wrapper_b64=$(printf '%s\n' \
         '#!/bin/sh' \
@@ -161,7 +172,6 @@ install_spotify_player() {
     ssh "$HOST" "
         echo \"$wrapper_b64\" | base64 -d > /tmp/openclaw_spotify_wrapper
         chmod +x /tmp/openclaw_spotify_wrapper
-        $COMPOSE exec -T openclaw mv $BIN_DIR/spotify_player $BIN_DIR/spotify_player.bin
         $COMPOSE cp /tmp/openclaw_spotify_wrapper openclaw:$BIN_DIR/spotify_player
         $COMPOSE exec -T openclaw chmod +x $BIN_DIR/spotify_player
         rm -f /tmp/openclaw_spotify_wrapper
