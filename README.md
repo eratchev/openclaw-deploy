@@ -271,10 +271,12 @@ Requires a Spotify Premium account and a Spotify developer app.
 
 **Step 2: Write the config into the container**
 
+The container filesystem is read-only — config must go inside the persistent volume at `/home/node/.openclaw/`:
+
 ```bash
 ssh user@your-vps "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw bash -c '
-  mkdir -p /home/node/.config/spotify-player
-  cat > /home/node/.config/spotify-player/app.toml << EOF
+  mkdir -p /home/node/.openclaw/spotify-player
+  cat > /home/node/.openclaw/spotify-player/app.toml << EOF
 [app]
 client_id = \"YOUR_CLIENT_ID\"
 client_secret = \"YOUR_CLIENT_SECRET\"
@@ -289,10 +291,11 @@ The container has no browser, so tunnel port 8080 through SSH so the OAuth redir
 ```bash
 ssh -L 8080:localhost:8080 user@your-vps \
   "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -it openclaw \
-  /home/node/.openclaw/bin/spotify_player"
+  /home/node/.openclaw/bin/spotify_player \
+  --config-folder /home/node/.openclaw/spotify-player"
 ```
 
-`spotify_player` will print an auth URL. Open it in your local browser, approve the permissions, and the redirect to `localhost:8080` travels back through the tunnel to complete auth. The token is saved — you only need to do this once.
+`spotify_player` will print an auth URL. Open it in your local browser, approve the permissions, and the redirect to `127.0.0.1:8080` travels back through the tunnel to complete auth. The token is saved to the persistent volume — you only need to do this once.
 
 After that, ask the bot: "play some jazz", "skip this song", "what's playing?"
 
