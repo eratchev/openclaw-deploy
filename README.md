@@ -266,7 +266,7 @@ Requires a Spotify Premium account and a Spotify developer app.
 **Step 1: Create a Spotify app**
 
 1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and create an app
-2. In app settings, add redirect URI: `http://localhost:8080`
+2. In app settings, add redirect URI: `http://127.0.0.1:8080` (use `127.0.0.1`, not `localhost` — Spotify rejects the latter)
 3. Copy your **Client ID** and **Client Secret**
 
 **Step 2: Write the config into the container**
