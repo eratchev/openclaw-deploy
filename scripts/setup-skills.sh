@@ -142,12 +142,42 @@ install_spotify_player() {
     "
     ok "spotify_player.bin installed at $BIN_DIR/spotify_player.bin"
 
-    step "spotify-player: creating wrapper (bakes in --config-folder)"
-    # Wrapper script that bakes in --config-folder so callers don't need to pass it.
+    step "spotify-player: installing shared libraries (libdbus-1.so.3, libasound.so.2)"
+    # The binary is dynamically linked against D-Bus and ALSA, which are absent in the container.
+    # Download the .debs from Ubuntu repos, extract each .so, copy into the persistent volume.
+    ssh "$HOST" "
+        set -euo pipefail
+        TMPD=\$(mktemp -d)
+        trap 'rm -rf \"\$TMPD\"' EXIT
+        cd \"\$TMPD\"
+        $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/lib
+
+        install_so() {
+            local pkg=\"\$1\" soname=\"\$2\" fallback=\"\${3:-}\"
+            apt-get download \"\$pkg\" 2>/dev/null \
+                || { [ -n \"\$fallback\" ] && apt-get download \"\$fallback\" 2>/dev/null; } \
+                || { echo \"ERROR: apt-get download \$pkg failed — try: sudo apt-get update\"; exit 1; }
+            DEB=\$(ls -t *.deb | head -1)
+            mkdir -p \"pkg_\$pkg\"
+            dpkg-deb -x \"\$DEB\" \"pkg_\$pkg\"
+            rm \"\$DEB\"
+            LIBFILE=\$(find \"pkg_\$pkg\" -name \"\${soname}*\" -type f | head -1)
+            [ -n \"\$LIBFILE\" ] || { echo \"ERROR: \$soname not found in \$pkg\"; exit 1; }
+            $COMPOSE cp \"\$LIBFILE\" openclaw:/home/node/.openclaw/lib/\$soname
+        }
+
+        install_so libdbus-1-3   libdbus-1.so.3
+        install_so libasound2t64 libasound.so.2 libasound2
+    "
+    ok "Shared libraries installed (libdbus-1.so.3, libasound.so.2)"
+
+    step "spotify-player: creating wrapper (LD_LIBRARY_PATH + --config-folder)"
+    # Sets LD_LIBRARY_PATH to pick up the libs above, and bakes in --config-folder.
     # Encoded as base64 locally to avoid shell quoting issues over ssh.
     local wrapper_b64
     wrapper_b64=$(printf '%s\n' \
         '#!/bin/sh' \
+        'export LD_LIBRARY_PATH="/home/node/.openclaw/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"' \
         'exec /home/node/.openclaw/bin/spotify_player.bin --config-folder /home/node/.openclaw/spotify-player "$@"' \
         | base64 | tr -d '\n')
     ssh "$HOST" "
@@ -157,7 +187,7 @@ install_spotify_player() {
         $COMPOSE exec -T openclaw chmod +x $BIN_DIR/spotify_player
         rm -f /tmp/openclaw_spotify_wrapper
     "
-    ok "spotify_player wrapper created (--config-folder baked in)"
+    ok "spotify_player wrapper created (LD_LIBRARY_PATH + --config-folder baked in)"
 
     register_approvals "spotify_player"
 }
