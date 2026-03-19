@@ -226,6 +226,78 @@ docker compose exec openclaw openclaw config set tools.web.search.maxResults 5
 docker compose restart openclaw
 ```
 
+## OpenClaw Skills *(optional)*
+
+OpenClaw ships with bundled skills that unlock additional capabilities. Some require external CLI binaries to be installed in the container. Install them in one step:
+
+```bash
+make setup-skills                                    # all supported skills
+make setup-skills SKILLS="github session-logs"       # specific skills only
+```
+
+Supported skills and their binaries:
+
+| Skill | Binary | Works out of the box? |
+|---|---|---|
+| `session-logs` | `jq`, `rg` | ✅ Yes |
+| `github` | `gh` | Needs `gh auth login` |
+| `spotify-player` | `spotify_player` | Needs Spotify app + OAuth |
+| `summarize` | `summarize` | ❌ Not available on Linux |
+
+---
+
+### GitHub skill
+
+After installing, authenticate `gh` inside the container:
+
+```bash
+make ssh   # or: ssh user@your-vps
+sudo docker compose exec -it openclaw gh auth login
+```
+
+Follow the prompts. Once authenticated, ask the bot things like "do I have any open PRs?" or "what's the status of my latest CI run?"
+
+---
+
+### Spotify skill
+
+Requires a Spotify Premium account and a Spotify developer app.
+
+**Step 1: Create a Spotify app**
+
+1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and create an app
+2. In app settings, add redirect URI: `http://localhost:8080`
+3. Copy your **Client ID** and **Client Secret**
+
+**Step 2: Write the config into the container**
+
+```bash
+ssh user@your-vps "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw bash -c '
+  mkdir -p /home/node/.config/spotify-player
+  cat > /home/node/.config/spotify-player/app.toml << EOF
+[app]
+client_id = \"YOUR_CLIENT_ID\"
+client_secret = \"YOUR_CLIENT_SECRET\"
+EOF
+'"
+```
+
+**Step 3: Authenticate via SSH port forwarding**
+
+The container has no browser, so tunnel port 8080 through SSH so the OAuth redirect reaches your local machine:
+
+```bash
+ssh -L 8080:localhost:8080 user@your-vps \
+  "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -it openclaw \
+  /home/node/.openclaw/bin/spotify_player"
+```
+
+`spotify_player` will print an auth URL. Open it in your local browser, approve the permissions, and the redirect to `localhost:8080` travels back through the tunnel to complete auth. The token is saved — you only need to do this once.
+
+After that, ask the bot: "play some jazz", "skip this song", "what's playing?"
+
+---
+
 ## Agent Workspace *(optional)*
 
 The `workspace/` directory contains the agent's instruction files. These are copied into the container at runtime and control agent behaviour:
