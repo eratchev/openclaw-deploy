@@ -179,9 +179,14 @@ install_spotify_player() {
     # Sets LD_LIBRARY_PATH to pick up the libs above, and bakes in --config-folder.
     # Encoded as base64 locally to avoid shell quoting issues over ssh.
     local wrapper_b64
+    # Redirect all XDG dirs into the persistent volume or /tmp so the read-only container
+    # filesystem is never touched. Without this spotify_player tries to write to ~/.cache etc.
     wrapper_b64=$(printf '%s\n' \
         '#!/bin/sh' \
         'export LD_LIBRARY_PATH="/home/node/.openclaw/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"' \
+        'export XDG_CACHE_HOME="/home/node/.openclaw/spotify-player/cache"' \
+        'export XDG_DATA_HOME="/home/node/.openclaw/spotify-player/data"' \
+        'export XDG_RUNTIME_DIR="/tmp/spotify-runtime"' \
         'exec /home/node/.openclaw/bin/spotify_player.bin --config-folder /home/node/.openclaw/spotify-player "$@"' \
         | base64 | tr -d '\n')
     ssh "$HOST" "
