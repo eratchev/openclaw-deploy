@@ -157,7 +157,7 @@ install_spotify_player() {
             set -e
             cd /tmp
             apt-get update -qq >&2
-            apt-get download libdbus-1-3 libasound2 >&2
+            apt-get download libdbus-1-3 libasound2 libasound2-data >&2
             tar cf - *.deb
         ' | tar xf - -C \"\$TMPD\"
 
@@ -172,8 +172,15 @@ install_spotify_player() {
         LIBASOUND=\$(find \"\$TMPD\" -name 'libasound.so.2*' -type f | head -1)
         [ -n \"\$LIBASOUND\" ] || { echo 'ERROR: libasound.so.2 not found in ubuntu:22.04 package'; exit 1; }
         $COMPOSE cp \"\$LIBASOUND\" openclaw:/home/node/.openclaw/lib/libasound.so.2
+
+        # Install ALSA data files (alsa.conf and friends). Without these libasound falls
+        # back to probing hardware directly and hits ENXIO (no /dev/snd/* in the container).
+        ALSACONF=\$(find \"\$TMPD\" -path '*/usr/share/alsa' -type d | head -1)
+        [ -n \"\$ALSACONF\" ] || { echo 'ERROR: /usr/share/alsa not found in libasound2-data'; exit 1; }
+        $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/alsa
+        $COMPOSE cp \"\$ALSACONF\" openclaw:/home/node/.openclaw/alsa/share
     "
-    ok "Shared libraries installed (libdbus-1.so.3, libasound.so.2) from ubuntu:22.04"
+    ok "Shared libraries + ALSA config installed from ubuntu:22.04"
 
     step "spotify-player: creating wrapper (LD_LIBRARY_PATH + --config-folder)"
     # Sets LD_LIBRARY_PATH to pick up the libs above, and bakes in --config-folder.
@@ -191,8 +198,10 @@ install_spotify_player() {
         'export XDG_CACHE_HOME="/home/node/.openclaw/spotify-player/cache"' \
         'export XDG_DATA_HOME="/home/node/.openclaw/spotify-player/data"' \
         'export XDG_RUNTIME_DIR="/tmp/spotify-runtime"' \
-        '# Null ALSA config: the container has no audio hardware; this stops librespot from' \
-        '# failing with ENXIO when it tries to open /dev/snd/* during startup.' \
+        '# Point ALSA at the data files we installed from ubuntu:22.04. Without this' \
+        '# libasound falls back to hardware probing and hits ENXIO (no /dev/snd/*).' \
+        'export ALSA_CONFIG_DIR="/home/node/.openclaw/alsa/share"' \
+        '# Override the default PCM/CTL to null so librespot initialises without audio hw.' \
         'mkdir -p "$HOME"' \
         'cat > "$HOME/.asoundrc" <<'"'"'ASOUND'"'"'' \
         'pcm.!default { type null }' \
