@@ -40,6 +40,10 @@ if [ ! -f "$CONFIG_FILE" ]; then
     openclaw config set agents.defaults.heartbeat.activeHours.start "09:00"
     openclaw config set agents.defaults.heartbeat.activeHours.end "22:00"
     openclaw config set agents.defaults.heartbeat.activeHours.timezone "America/Los_Angeles"
+    # Explicit Telegram delivery target (Telegram chat ID) — set HEARTBEAT_TO in .env
+    if [ -n "${HEARTBEAT_TO:-}" ]; then
+        openclaw config set agents.defaults.heartbeat.to "${HEARTBEAT_TO}"
+    fi
 
     # ── Morning cron ────────────────────────────────────────────────────────────
     # || true: job persists in volume across restarts; guard prevents set -e from

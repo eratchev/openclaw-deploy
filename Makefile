@@ -89,6 +89,7 @@ open(p,'w').write(json.dumps(d,indent=2)); print('socket path fixed')"
 	@echo "Exec approvals configured. Run 'make logs' to verify."
 
 # Configure heartbeat and morning cron (run once on existing deployment, or after reset)
+# Usage: make setup-heartbeat HOST=user@x.x.x.x HEARTBEAT_TO=<telegram-chat-id>
 setup-heartbeat:
 	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
 	ssh "$(HOST)" "cd ~/openclaw-deploy && \
@@ -98,6 +99,7 @@ setup-heartbeat:
 	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.activeHours.start '09:00' && \
 	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.activeHours.end '22:00' && \
 	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.activeHours.timezone 'America/Los_Angeles' && \
+	  $(if $(HEARTBEAT_TO),sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.to '\"$(HEARTBEAT_TO)\"' &&,) \
 	  sudo docker compose exec -T openclaw openclaw cron add \
 	    --name 'Morning briefing' \
 	    --cron '0 9 * * *' \
