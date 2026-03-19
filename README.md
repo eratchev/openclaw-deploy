@@ -289,12 +289,12 @@ EOF
 The container has no browser, so tunnel port 8080 through SSH so the OAuth redirect reaches your local machine:
 
 ```bash
-ssh -L 8080:localhost:8080 user@your-vps \
+ssh -t user@your-vps \
   "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -it openclaw \
   /home/node/.openclaw/bin/spotify_player"
 ```
 
-`spotify_player` will print an auth URL. Open it in your local browser, approve the permissions, and the redirect to `127.0.0.1:8080` travels back through the tunnel to complete auth. The token is saved to the persistent volume — you only need to do this once.
+`spotify_player` will prompt for your **Spotify account username and password** (the old librespot auth flow — uses your Spotify login, not the developer app secret). The `-t` flag is required so SSH allocates a TTY; without it `rpassword` cannot open `/dev/tty` and the password prompt crashes. Credentials are cached in the persistent volume — you only need to do this once.
 
 After that, ask the bot: "play some jazz", "skip this song", "what's playing?"
 
