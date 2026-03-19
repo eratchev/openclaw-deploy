@@ -80,7 +80,7 @@ install_tarball_bin() {
         curl -fsSL '$url' | tar -xz -C \"\$TMPD\"
         BIN=\$(find \"\$TMPD\" -name '$name' -type f | head -1)
         [ -n \"\$BIN\" ] || { echo 'Binary $name not found in tarball'; exit 1; }
-        cp \"\$BIN\" \"\$TMPD/$name\"
+        [ \"\$BIN\" = \"\$TMPD/$name\" ] || cp \"\$BIN\" \"\$TMPD/$name\"
         chmod +x \"\$TMPD/$name\"
         $COMPOSE cp \"\$TMPD/$name\" openclaw:$BIN_DIR/$name
         $COMPOSE exec -T openclaw chmod +x $BIN_DIR/$name
