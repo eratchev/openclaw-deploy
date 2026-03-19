@@ -122,11 +122,12 @@ install_session_logs() {
 }
 
 install_spotify_player() {
-    step "Installing spotify-player skill → spotify_player.bin (musl/static)"
-    # Use the musl build: statically linked, no glibc version dependency, no shared libs needed.
-    local url
-    url=$(latest_gh_asset "aome510/spotify-player" "x86_64-unknown-linux-musl.tar.gz")
-    [ -n "$url" ] || fail "Could not find spotify_player release for x86_64-unknown-linux-musl"
+    step "Installing spotify-player skill → spotify_player.bin"
+    # Pinned to v0.17.2: last release compiled on Ubuntu 22.04 (glibc 2.35).
+    # Releases v0.18.0+ were compiled on Ubuntu 24.04 (requires GLIBC_2.38/2.39) and will
+    # fail inside the Node.js container which ships with an older glibc.
+    local SPOTIFY_VERSION="v0.17.2"
+    local url="https://github.com/aome510/spotify-player/releases/download/${SPOTIFY_VERSION}/spotify_player-x86_64-unknown-linux-gnu.tar.gz"
     # Install directly as spotify_player.bin via docker cp to avoid rename inside the container
     # (docker cp creates files owned by root; mv as node user would fail).
     ssh "$HOST" "
