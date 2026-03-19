@@ -153,7 +153,7 @@ install_spotify_player() {
         trap 'rm -rf \"\$TMPD\"' EXIT
         $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/lib
 
-        sudo docker run --rm ubuntu:22.04 sh -c '
+        sudo docker run --rm --network host ubuntu:22.04 sh -c '
             set -e
             cd /tmp
             apt-get update -qq >&2
