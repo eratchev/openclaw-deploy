@@ -338,6 +338,21 @@ if [[ "${whatsapp_yn,,}" == "y" ]]; then
     fi
 fi
 
+# ── Step 12: Install skill binaries (optional) ───────────────────────────────
+skills_installed=false
+echo ""
+printf "  Install OpenClaw skill binaries (github, session-logs, spotify-player)? [y/N]: " >&2
+read -r skills_yn
+if [[ "${skills_yn,,}" == "y" ]]; then
+    step "Installing skill binaries"
+    if bash "$SCRIPT_DIR/setup-skills.sh" "$HOST"; then
+        ok "Skill binaries installed"
+        skills_installed=true
+    else
+        warn "Skill install had errors — run: make setup-skills"
+    fi
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -367,6 +382,11 @@ if rsh "sudo docker compose -f $REMOTE_DIR/docker-compose.yml exec -T openclaw t
     echo -e "  ${GREEN}✅${NC} Calendar    Google Calendar configured"
 else
     echo -e "  ${YELLOW}⚪${NC} Calendar    Google Calendar not set up — see docs/runbook.md §10"
+fi
+if $skills_installed; then
+    echo -e "  ${GREEN}✅${NC} Skills      github, session-logs, spotify-player installed"
+else
+    echo -e "  ${YELLOW}⚪${NC} Skills      not installed — run: make setup-skills"
 fi
 echo ""
 echo "  Health check:  make doctor"
