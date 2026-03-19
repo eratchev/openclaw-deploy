@@ -191,6 +191,13 @@ install_spotify_player() {
         'export XDG_CACHE_HOME="/home/node/.openclaw/spotify-player/cache"' \
         'export XDG_DATA_HOME="/home/node/.openclaw/spotify-player/data"' \
         'export XDG_RUNTIME_DIR="/tmp/spotify-runtime"' \
+        '# Null ALSA config: the container has no audio hardware; this stops librespot from' \
+        '# failing with ENXIO when it tries to open /dev/snd/* during startup.' \
+        'mkdir -p "$HOME"' \
+        'cat > "$HOME/.asoundrc" <<'"'"'ASOUND'"'"'' \
+        'pcm.!default { type null }' \
+        'ctl.!default { type null }' \
+        'ASOUND' \
         'exec /home/node/.openclaw/bin/spotify_player.bin --config-folder /home/node/.openclaw/spotify-player "$@"' \
         | base64 | tr -d '\n')
     ssh "$HOST" "
