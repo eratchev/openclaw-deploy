@@ -50,7 +50,7 @@ latest_gh_asset() {
 
 # Ensure the bin directory exists inside the container
 ensure_bin_dir() {
-    ssh "$HOST" "$COMPOSE exec -T openclaw mkdir -p $BIN_DIR"
+    ssh "$HOST" "$COMPOSE exec -T openclaw mkdir -p \"$BIN_DIR\""
 }
 
 # Install a single binary into the container from a VPS path
@@ -82,8 +82,8 @@ install_tarball_bin() {
         [ -n \"\$BIN\" ] || { echo 'Binary $name not found in tarball'; exit 1; }
         cp \"\$BIN\" \"\$TMPD/$name\"
         chmod +x \"\$TMPD/$name\"
-        sudo docker compose -f ~/openclaw-deploy/docker-compose.yml cp \"\$TMPD/$name\" openclaw:$BIN_DIR/$name
-        sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw chmod +x $BIN_DIR/$name
+        $COMPOSE cp \"\$TMPD/$name\" openclaw:$BIN_DIR/$name
+        $COMPOSE exec -T openclaw chmod +x $BIN_DIR/$name
     "
     ok "$display installed at $BIN_DIR/$name"
 }
@@ -107,8 +107,8 @@ install_session_logs() {
         trap 'rm -rf \"\$TMPD\"' EXIT
         curl -fsSL '$jq_url' -o \"\$TMPD/jq\"
         chmod +x \"\$TMPD/jq\"
-        sudo docker compose -f ~/openclaw-deploy/docker-compose.yml cp \"\$TMPD/jq\" openclaw:$BIN_DIR/jq
-        sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw chmod +x $BIN_DIR/jq
+        $COMPOSE cp \"\$TMPD/jq\" openclaw:$BIN_DIR/jq
+        $COMPOSE exec -T openclaw chmod +x $BIN_DIR/jq
     "
     ok "jq installed at $BIN_DIR/jq"
     register_approvals "jq"
