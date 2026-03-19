@@ -170,6 +170,27 @@ else
     skip "Gmail  not configured  →  run: make setup-gmail CLIENT_SECRET=..."
 fi
 
+# ── Skills ─────────────────────────────────────────────────────────────────────
+
+echo ""
+echo " Skills"
+
+check_skill_bin() {
+    local bin="$1" skill="$2"
+    if sudo docker compose exec -T openclaw test -f "$BIN_DIR/$bin" 2>/dev/null; then
+        pass "$skill  ($bin installed)"
+    else
+        skip "$skill  ($bin not installed  →  run: make setup-skills SKILLS=$skill)"
+    fi
+}
+
+BIN_DIR="/home/node/.openclaw/bin"
+check_skill_bin "gh"             "github"
+check_skill_bin "jq"             "session-logs (jq)"
+check_skill_bin "rg"             "session-logs (rg)"
+check_skill_bin "spotify_player" "spotify-player"
+skip "summarize  (not available on Linux — macOS only)"
+
 # ── Backups ────────────────────────────────────────────────────────────────────
 
 echo ""
