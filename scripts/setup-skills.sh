@@ -122,12 +122,13 @@ install_session_logs() {
 }
 
 install_spotify_player() {
-    step "Installing spotify-player skill → spotify_player.bin"
+    step "Installing spotify-player skill → spotify_player.bin (musl/static)"
+    # Use the musl build: statically linked, no glibc version dependency, no shared libs needed.
     local url
-    url=$(latest_gh_asset "aome510/spotify-player" "x86_64-unknown-linux-gnu.tar.gz")
-    [ -n "$url" ] || fail "Could not find spotify_player release for x86_64-unknown-linux-gnu"
-    # Install real binary directly as spotify_player.bin via docker cp — avoids a rename inside
-    # the container, which fails when docker cp creates the file owned by root.
+    url=$(latest_gh_asset "aome510/spotify-player" "x86_64-unknown-linux-musl.tar.gz")
+    [ -n "$url" ] || fail "Could not find spotify_player release for x86_64-unknown-linux-musl"
+    # Install directly as spotify_player.bin via docker cp to avoid rename inside the container
+    # (docker cp creates files owned by root; mv as node user would fail).
     ssh "$HOST" "
         TMPD=\$(mktemp -d)
         trap 'rm -rf \"\$TMPD\"' EXIT
@@ -140,44 +141,12 @@ install_spotify_player() {
     "
     ok "spotify_player.bin installed at $BIN_DIR/spotify_player.bin"
 
-    step "spotify-player: installing shared libraries into persistent volume"
-    # spotify_player is dynamically linked against ALSA and D-Bus, which are absent in the
-    # container. Download the .debs from Ubuntu repos, extract each .so, copy into the
-    # container's persistent volume (survives restarts).
-    # Mapping: pkg_name  soname  fallback_pkg
-    ssh "$HOST" "
-        set -euo pipefail
-        TMPD=\$(mktemp -d)
-        trap 'rm -rf \"\$TMPD\"' EXIT
-        cd \"\$TMPD\"
-        $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/lib
-
-        install_so() {
-            local pkg=\"\$1\" soname=\"\$2\" fallback=\"\${3:-}\"
-            apt-get download \"\$pkg\" 2>/dev/null \
-                || { [ -n \"\$fallback\" ] && apt-get download \"\$fallback\" 2>/dev/null; } \
-                || { echo \"ERROR: apt-get download \$pkg failed — try: sudo apt-get update\"; exit 1; }
-            DEB=\$(ls -t *.deb | head -1)
-            mkdir -p \"pkg_\$pkg\"
-            dpkg-deb -x \"\$DEB\" \"pkg_\$pkg\"
-            rm \"\$DEB\"
-            LIBFILE=\$(find \"pkg_\$pkg\" -name \"\${soname}*\" -type f | head -1)
-            [ -n \"\$LIBFILE\" ] || { echo \"ERROR: \$soname not found in \$pkg\"; exit 1; }
-            $COMPOSE cp \"\$LIBFILE\" openclaw:/home/node/.openclaw/lib/\$soname
-        }
-
-        install_so libasound2t64  libasound.so.2  libasound2
-        install_so libdbus-1-3    libdbus-1.so.3
-    "
-    ok "Shared libraries installed (libasound.so.2, libdbus-1.so.3)"
-
-    step "spotify-player: creating LD_LIBRARY_PATH wrapper"
-    # Install a wrapper script as spotify_player that sets LD_LIBRARY_PATH and bakes in
-    # --config-folder. Encoded as base64 locally to avoid shell quoting issues over ssh.
+    step "spotify-player: creating wrapper (bakes in --config-folder)"
+    # Wrapper script that bakes in --config-folder so callers don't need to pass it.
+    # Encoded as base64 locally to avoid shell quoting issues over ssh.
     local wrapper_b64
     wrapper_b64=$(printf '%s\n' \
         '#!/bin/sh' \
-        'export LD_LIBRARY_PATH="/home/node/.openclaw/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"' \
         'exec /home/node/.openclaw/bin/spotify_player.bin --config-folder /home/node/.openclaw/spotify-player "$@"' \
         | base64 | tr -d '\n')
     ssh "$HOST" "
@@ -187,7 +156,7 @@ install_spotify_player() {
         $COMPOSE exec -T openclaw chmod +x $BIN_DIR/spotify_player
         rm -f /tmp/openclaw_spotify_wrapper
     "
-    ok "spotify_player wrapper created (LD_LIBRARY_PATH + --config-folder baked in)"
+    ok "spotify_player wrapper created (--config-folder baked in)"
 
     register_approvals "spotify_player"
 }
