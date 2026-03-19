@@ -143,33 +143,36 @@ install_spotify_player() {
     ok "spotify_player.bin installed at $BIN_DIR/spotify_player.bin"
 
     step "spotify-player: installing shared libraries (libdbus-1.so.3, libasound.so.2)"
-    # The binary is dynamically linked against D-Bus and ALSA, which are absent in the container.
-    # Download the .debs from Ubuntu repos, extract each .so, copy into the persistent volume.
+    # The binary (v0.17.2, compiled on Ubuntu 22.04 / glibc 2.35) needs libs with matching
+    # glibc compatibility. The VPS is Ubuntu 24.04 so its apt-get fetches Noble packages that
+    # require GLIBC_2.38 — which the Node.js container doesn't have. Use a ubuntu:22.04
+    # container to download Jammy packages (glibc ≤ 2.35) instead.
     ssh "$HOST" "
         set -euo pipefail
         TMPD=\$(mktemp -d)
         trap 'rm -rf \"\$TMPD\"' EXIT
-        cd \"\$TMPD\"
         $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/lib
 
-        install_so() {
-            local pkg=\"\$1\" soname=\"\$2\" fallback=\"\${3:-}\"
-            apt-get download \"\$pkg\" 2>/dev/null \
-                || { [ -n \"\$fallback\" ] && apt-get download \"\$fallback\" 2>/dev/null; } \
-                || { echo \"ERROR: apt-get download \$pkg failed — try: sudo apt-get update\"; exit 1; }
-            DEB=\$(ls -t *.deb | head -1)
-            mkdir -p \"pkg_\$pkg\"
-            dpkg-deb -x \"\$DEB\" \"pkg_\$pkg\"
-            rm \"\$DEB\"
-            LIBFILE=\$(find \"pkg_\$pkg\" -name \"\${soname}*\" -type f | head -1)
-            [ -n \"\$LIBFILE\" ] || { echo \"ERROR: \$soname not found in \$pkg\"; exit 1; }
-            $COMPOSE cp \"\$LIBFILE\" openclaw:/home/node/.openclaw/lib/\$soname
-        }
+        sudo docker run --rm ubuntu:22.04 sh -c '
+            cd /tmp
+            apt-get update -qq 2>/dev/null
+            apt-get download libdbus-1-3 libasound2 2>/dev/null
+            tar cf - *.deb
+        ' | tar xf - -C \"\$TMPD\"
 
-        install_so libdbus-1-3   libdbus-1.so.3
-        install_so libasound2t64 libasound.so.2 libasound2
+        for deb in \"\$TMPD\"/*.deb; do
+            dpkg-deb -x \"\$deb\" \"\$TMPD/pkg_\$(basename \"\$deb\" .deb)\"
+        done
+
+        LIBDBUS=\$(find \"\$TMPD\" -name 'libdbus-1.so.3*' -type f | head -1)
+        [ -n \"\$LIBDBUS\" ] || { echo 'ERROR: libdbus-1.so.3 not found in ubuntu:22.04 package'; exit 1; }
+        $COMPOSE cp \"\$LIBDBUS\" openclaw:/home/node/.openclaw/lib/libdbus-1.so.3
+
+        LIBASOUND=\$(find \"\$TMPD\" -name 'libasound.so.2*' -type f | head -1)
+        [ -n \"\$LIBASOUND\" ] || { echo 'ERROR: libasound.so.2 not found in ubuntu:22.04 package'; exit 1; }
+        $COMPOSE cp \"\$LIBASOUND\" openclaw:/home/node/.openclaw/lib/libasound.so.2
     "
-    ok "Shared libraries installed (libdbus-1.so.3, libasound.so.2)"
+    ok "Shared libraries installed (libdbus-1.so.3, libasound.so.2) from ubuntu:22.04"
 
     step "spotify-player: creating wrapper (LD_LIBRARY_PATH + --config-folder)"
     # Sets LD_LIBRARY_PATH to pick up the libs above, and bakes in --config-folder.
