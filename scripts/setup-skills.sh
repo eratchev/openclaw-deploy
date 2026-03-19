@@ -181,8 +181,12 @@ install_spotify_player() {
     local wrapper_b64
     # Redirect all XDG dirs into the persistent volume or /tmp so the read-only container
     # filesystem is never touched. Without this spotify_player tries to write to ~/.cache etc.
+    # Redirect all write-prone paths to writable locations (persistent volume or /tmp).
+    # HOME=/home/node is read-only in the container; anything that falls back to ~/
+    # instead of XDG dirs would hit EROFS without this override.
     wrapper_b64=$(printf '%s\n' \
         '#!/bin/sh' \
+        'export HOME="/home/node/.openclaw/spotify-player"' \
         'export LD_LIBRARY_PATH="/home/node/.openclaw/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"' \
         'export XDG_CACHE_HOME="/home/node/.openclaw/spotify-player/cache"' \
         'export XDG_DATA_HOME="/home/node/.openclaw/spotify-player/data"' \
