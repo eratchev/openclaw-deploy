@@ -154,9 +154,10 @@ install_spotify_player() {
         $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/lib
 
         sudo docker run --rm ubuntu:22.04 sh -c '
+            set -e
             cd /tmp
-            apt-get update -qq 2>/dev/null
-            apt-get download libdbus-1-3 libasound2 2>/dev/null
+            apt-get update -qq >&2
+            apt-get download libdbus-1-3 libasound2 >&2
             tar cf - *.deb
         ' | tar xf - -C \"\$TMPD\"
 
