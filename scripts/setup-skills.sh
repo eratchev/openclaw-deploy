@@ -122,103 +122,65 @@ install_session_logs() {
 }
 
 install_spotify_player() {
-    step "Installing spotify-player skill → spotify_player.bin"
-    # Pinned to v0.17.2: last release compiled on Ubuntu 22.04 (glibc 2.35).
-    # Releases v0.18.0+ were compiled on Ubuntu 24.04 (requires GLIBC_2.38/2.39) and will
-    # fail inside the Node.js container which ships with an older glibc.
-    local SPOTIFY_VERSION="v0.17.2"
-    local url="https://github.com/aome510/spotify-player/releases/download/${SPOTIFY_VERSION}/spotify_player-x86_64-unknown-linux-gnu.tar.gz"
-    # Install directly as spotify_player.bin via docker cp to avoid rename inside the container
-    # (docker cp creates files owned by root; mv as node user would fail).
+    step "Installing spotify-player skill → spogo"
+    # spogo is a statically compiled Go binary that controls Spotify via the Web API.
+    # Preferred over spotify_player: no glibc dependency, works with OAuth-linked accounts
+    # (Google, Apple, Yahoo sign-in), no audio libraries needed.
+    local url
+    url=$(latest_gh_asset "steipete/spogo" "linux_amd64.tar.gz")
+    [ -n "$url" ] || fail "Could not find spogo release for linux_amd64"
+
+    # Install binary as spogo.bin, then create a wrapper that pins config to the persistent volume.
+    # The container filesystem is read-only; spogo's default config dir (~/.config/spogo) is not
+    # writable. The wrapper redirects it to /home/node/.openclaw/spogo via --config.
     ssh "$HOST" "
         TMPD=\$(mktemp -d)
         trap 'rm -rf \"\$TMPD\"' EXIT
         curl -fsSL '$url' | tar -xz -C \"\$TMPD\"
-        BIN=\$(find \"\$TMPD\" -name 'spotify_player' -type f | head -1)
-        [ -n \"\$BIN\" ] || { echo 'ERROR: spotify_player binary not found in tarball'; exit 1; }
+        BIN=\$(find \"\$TMPD\" -name 'spogo' -type f | head -1)
+        [ -n \"\$BIN\" ] || { echo 'ERROR: spogo binary not found in tarball'; exit 1; }
         chmod +x \"\$BIN\"
-        $COMPOSE cp \"\$BIN\" openclaw:$BIN_DIR/spotify_player.bin
-        $COMPOSE exec -T openclaw chmod +x $BIN_DIR/spotify_player.bin
+        $COMPOSE cp \"\$BIN\" openclaw:$BIN_DIR/spogo.bin
+        $COMPOSE exec -T openclaw chmod +x $BIN_DIR/spogo.bin
     "
-    ok "spotify_player.bin installed at $BIN_DIR/spotify_player.bin"
+    ok "spogo.bin installed at $BIN_DIR/spogo.bin"
 
-    step "spotify-player: installing shared libraries (libdbus-1.so.3, libasound.so.2)"
-    # The binary (v0.17.2, compiled on Ubuntu 22.04 / glibc 2.35) needs libs with matching
-    # glibc compatibility. The VPS is Ubuntu 24.04 so its apt-get fetches Noble packages that
-    # require GLIBC_2.38 — which the Node.js container doesn't have. Use a ubuntu:22.04
-    # container to download Jammy packages (glibc ≤ 2.35) instead.
-    ssh "$HOST" "
-        set -euo pipefail
-        TMPD=\$(mktemp -d)
-        trap 'rm -rf \"\$TMPD\"' EXIT
-        $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/lib
-
-        sudo docker run --rm --network host ubuntu:22.04 sh -c '
-            set -e
-            cd /tmp
-            apt-get update -qq >&2
-            apt-get download libdbus-1-3 libasound2 libasound2-data >&2
-            tar cf - *.deb
-        ' | tar xf - -C \"\$TMPD\"
-
-        for deb in \"\$TMPD\"/*.deb; do
-            dpkg-deb -x \"\$deb\" \"\$TMPD/pkg_\$(basename \"\$deb\" .deb)\"
-        done
-
-        LIBDBUS=\$(find \"\$TMPD\" -name 'libdbus-1.so.3*' -type f | head -1)
-        [ -n \"\$LIBDBUS\" ] || { echo 'ERROR: libdbus-1.so.3 not found in ubuntu:22.04 package'; exit 1; }
-        $COMPOSE cp \"\$LIBDBUS\" openclaw:/home/node/.openclaw/lib/libdbus-1.so.3
-
-        LIBASOUND=\$(find \"\$TMPD\" -name 'libasound.so.2*' -type f | head -1)
-        [ -n \"\$LIBASOUND\" ] || { echo 'ERROR: libasound.so.2 not found in ubuntu:22.04 package'; exit 1; }
-        $COMPOSE cp \"\$LIBASOUND\" openclaw:/home/node/.openclaw/lib/libasound.so.2
-
-        # Install ALSA data files (alsa.conf and friends). Without these libasound falls
-        # back to probing hardware directly and hits ENXIO (no /dev/snd/* in the container).
-        ALSACONF=\$(find \"\$TMPD\" -path '*/usr/share/alsa' -type d | head -1)
-        [ -n \"\$ALSACONF\" ] || { echo 'ERROR: /usr/share/alsa not found in libasound2-data'; exit 1; }
-        $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/alsa
-        $COMPOSE cp \"\$ALSACONF\" openclaw:/home/node/.openclaw/alsa/share
-    "
-    ok "Shared libraries + ALSA config installed from ubuntu:22.04"
-
-    step "spotify-player: creating wrapper (LD_LIBRARY_PATH + --config-folder)"
-    # Sets LD_LIBRARY_PATH to pick up the libs above, and bakes in --config-folder.
-    # Encoded as base64 locally to avoid shell quoting issues over ssh.
+    step "spotify-player: creating spogo wrapper + config"
+    # The container filesystem is read-only. spogo's default config dir (~/.config/spogo/)
+    # is not writable. We set XDG_CONFIG_HOME so spogo resolves all paths inside the
+    # persistent volume. The config.toml sets cookie_path explicitly so spogo finds cookies
+    # without needing to probe the OS browser cookie store (which doesn't exist on a server).
     local wrapper_b64
-    # Redirect all XDG dirs into the persistent volume or /tmp so the read-only container
-    # filesystem is never touched. Without this spotify_player tries to write to ~/.cache etc.
-    # Redirect all write-prone paths to writable locations (persistent volume or /tmp).
-    # HOME=/home/node is read-only in the container; anything that falls back to ~/
-    # instead of XDG dirs would hit EROFS without this override.
     wrapper_b64=$(printf '%s\n' \
         '#!/bin/sh' \
-        'export HOME="/home/node/.openclaw/spotify-player"' \
-        'export LD_LIBRARY_PATH="/home/node/.openclaw/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"' \
-        'export XDG_CACHE_HOME="/home/node/.openclaw/spotify-player/cache"' \
-        'export XDG_DATA_HOME="/home/node/.openclaw/spotify-player/data"' \
-        'export XDG_RUNTIME_DIR="/tmp/spotify-runtime"' \
-        '# Point ALSA at the data files we installed from ubuntu:22.04. Without this' \
-        '# libasound falls back to hardware probing and hits ENXIO (no /dev/snd/*).' \
-        'export ALSA_CONFIG_DIR="/home/node/.openclaw/alsa/share"' \
-        '# Override the default PCM/CTL to null so librespot initialises without audio hw.' \
-        'mkdir -p "$HOME"' \
-        'cat > "$HOME/.asoundrc" <<'"'"'ASOUND'"'"'' \
-        'pcm.!default { type null }' \
-        'ctl.!default { type null }' \
-        'ASOUND' \
-        'exec /home/node/.openclaw/bin/spotify_player.bin --config-folder /home/node/.openclaw/spotify-player "$@"' \
+        'export XDG_CONFIG_HOME="/home/node/.openclaw"' \
+        'exec /home/node/.openclaw/bin/spogo.bin "$@"' \
         | base64 | tr -d '\n')
     ssh "$HOST" "
-        echo \"$wrapper_b64\" | base64 -d > /tmp/openclaw_spotify_wrapper
-        chmod +x /tmp/openclaw_spotify_wrapper
-        $COMPOSE cp /tmp/openclaw_spotify_wrapper openclaw:$BIN_DIR/spotify_player
-        $COMPOSE exec -T openclaw chmod +x $BIN_DIR/spotify_player
-        rm -f /tmp/openclaw_spotify_wrapper
-    "
-    ok "spotify_player wrapper created (LD_LIBRARY_PATH + --config-folder baked in)"
+        echo \"$wrapper_b64\" | base64 -d > /tmp/openclaw_spogo_wrapper
+        chmod +x /tmp/openclaw_spogo_wrapper
+        $COMPOSE cp /tmp/openclaw_spogo_wrapper openclaw:$BIN_DIR/spogo
+        $COMPOSE exec -T openclaw chmod +x $BIN_DIR/spogo
+        rm -f /tmp/openclaw_spogo_wrapper
 
-    register_approvals "spotify_player"
+        # Write config.toml with explicit cookie_path so API calls use the file store.
+        # Without this spogo falls back to browser cookie extraction (unavailable on server).
+        $COMPOSE exec -T openclaw mkdir -p /home/node/.openclaw/spogo/cookies
+        printf '[profile.default]\ncookie_path = \"/home/node/.openclaw/spogo/cookies/default.json\"\n' \
+            | $COMPOSE exec -T openclaw sh -c 'cat > /home/node/.openclaw/spogo/config.toml'
+    "
+    ok "spogo wrapper and config.toml written"
+
+    register_approvals "spogo"
+
+    echo ""
+    echo -e "  ${BOLD}Auth required — authenticate spogo with your Spotify account:${NC}"
+    echo "  1. Open open.spotify.com in Chrome/Firefox while logged in"
+    echo "  2. DevTools → Application → Cookies → open.spotify.com → copy 'sp_dc' value"
+    echo "  3. Run:"
+    echo "       ssh $HOST \\"
+    echo "         \"$COMPOSE exec -it openclaw /home/node/.openclaw/bin/spogo auth paste\""
+    echo "  4. Paste the sp_dc cookie value when prompted"
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -231,7 +193,7 @@ for skill in "${SKILLS[@]}"; do
     case "$skill" in
         github)         install_github;         NEW_BINS+=(gh) ;;
         session-logs)   install_session_logs;   NEW_BINS+=(jq rg) ;;
-        spotify-player) install_spotify_player; NEW_BINS+=(spotify_player) ;;
+        spotify-player) install_spotify_player; NEW_BINS+=(spogo) ;;
         summarize)
             skip "summarize — not available on Linux (macOS brew-only package)"
             ;;

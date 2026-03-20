@@ -241,7 +241,7 @@ Supported skills and their binaries:
 |---|---|---|
 | `session-logs` | `jq`, `rg` | ✅ Yes |
 | `github` | `gh` | Needs `gh auth login` |
-| `spotify-player` | `spotify_player` | Needs Spotify app + OAuth |
+| `spotify-player` | `spogo` | Needs cookie auth (see below) |
 | `summarize` | `summarize` | ❌ Not available on Linux |
 
 ---
@@ -261,40 +261,51 @@ Follow the prompts. Once authenticated, ask the bot things like "do I have any o
 
 ### Spotify skill
 
-Requires a Spotify Premium account and a Spotify developer app.
+Requires a Spotify Premium account. Uses [spogo](https://github.com/steipete/spogo) — a statically compiled CLI that controls Spotify via the Web API using a browser session cookie. Works with any sign-in method (Google, Apple, Yahoo, email).
 
-**Step 1: Create a Spotify app**
-
-1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and create an app
-2. In app settings, add redirect URI: `http://127.0.0.1:8080` (use `127.0.0.1`, not `localhost` — Spotify rejects the latter)
-3. Copy your **Client ID** and **Client Secret**
-
-**Step 2: Write the config into the container**
-
-The container filesystem is read-only — config must go inside the persistent volume at `/home/node/.openclaw/`:
+**Install:**
 
 ```bash
-ssh user@your-vps "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw bash -c '
-  mkdir -p /home/node/.openclaw/spotify-player
-  cat > /home/node/.openclaw/spotify-player/app.toml << EOF
-[app]
-client_id = \"YOUR_CLIENT_ID\"
-client_secret = \"YOUR_CLIENT_SECRET\"
-EOF
-'"
+make setup-skills SKILLS=spotify-player
 ```
 
-**Step 3: Authenticate via SSH port forwarding**
+**Authenticate:**
 
-The container has no browser, so tunnel port 8080 through SSH so the OAuth redirect reaches your local machine:
+1. Open [open.spotify.com](https://open.spotify.com) in Chrome/Firefox while logged in to Spotify
+2. Open DevTools → Application → Cookies → `open.spotify.com` → copy the values of **`sp_dc`** and **`sp_t`**
+3. Run this on your local machine (substituting the cookie values):
 
 ```bash
-ssh -t user@your-vps \
-  "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -it openclaw \
-  /home/node/.openclaw/bin/spotify_player"
+SP_DC="your-sp_dc-value"
+SP_T="your-sp_t-value"
+
+python3 -c "
+import json
+cookies = [
+    {'name':'sp_dc','value':'$SP_DC','domain':'.spotify.com','path':'/','expires':'2027-12-31T23:59:59Z','secure':True,'http_only':True},
+    {'name':'sp_t','value':'$SP_T','domain':'.spotify.com','path':'/','expires':'2027-12-31T23:59:59Z','secure':True,'http_only':False}
+]
+print(json.dumps(cookies, indent=2))
+" > /tmp/spogo_cookies.json
+
+scp /tmp/spogo_cookies.json user@your-vps:/tmp/spogo_cookies.json
+ssh user@your-vps "
+  sudo docker compose -f ~/openclaw-deploy/docker-compose.yml cp \
+    /tmp/spogo_cookies.json openclaw:/home/node/.openclaw/spogo/cookies/default.json
+  rm -f /tmp/spogo_cookies.json
+"
+rm -f /tmp/spogo_cookies.json
 ```
 
-`spotify_player` will prompt for your **Spotify account username and password** (the old librespot auth flow — uses your Spotify login, not the developer app secret). The `-t` flag is required so SSH allocates a TTY; without it `rpassword` cannot open `/dev/tty` and the password prompt crashes. Credentials are cached in the persistent volume — you only need to do this once.
+Verify: `make doctor` or:
+
+```bash
+ssh user@your-vps \
+  "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw \
+  /home/node/.openclaw/bin/spogo auth status"
+```
+
+Credentials are stored in the persistent volume. Re-run the auth step if the cookies expire (typically annually).
 
 After that, ask the bot: "play some jazz", "skip this song", "what's playing?"
 
