@@ -44,6 +44,7 @@ services:
       - .env
     environment:
       - NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=1536}
+      - PATH=/home/node/.openclaw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     cap_drop:
       - ALL
     security_opt:
