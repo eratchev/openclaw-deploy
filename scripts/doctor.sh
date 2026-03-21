@@ -188,7 +188,7 @@ BIN_DIR="/home/node/.openclaw/bin"
 check_skill_bin "gh"             "github"
 check_skill_bin "jq"             "session-logs (jq)"
 check_skill_bin "rg"             "session-logs (rg)"
-check_skill_bin "spotify_player" "spotify-player"
+check_skill_bin "spogo"          "spotify-player"
 skip "summarize  (not available on Linux — macOS only)"
 
 # ── Backups ────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add `make setup-skills` so users can opt-in install OpenClaw skill binaries (gh, jq, rg, spotify_player) into the container in one step, consistent with existing `setup-gcal` / `setup-gmail` patterns.
+**Goal:** Add `make setup-skills` so users can opt-in install OpenClaw skill binaries (gh, jq, rg, spogo) into the container in one step, consistent with existing `setup-gcal` / `setup-gmail` patterns.
 
 **Architecture:** A new `scripts/setup-skills.sh` script downloads static Linux amd64 binaries from GitHub releases onto the VPS, copies them into the openclaw container via `docker cp`, registers each on the exec approvals allowlist, and merges them into `tools.exec.safeBins`. A `make setup-skills` target calls it. `doctor.sh` grows a new "Skills" section that shows which skill binaries are present. The `summarize` skill (macOS-only via brew, no Linux binary) is explicitly excluded with a note.
 
@@ -16,7 +16,7 @@
 |---|---|---|
 | `github` | `gh` | GitHub CLI releases tarball (`cli/cli`) |
 | `session-logs` | `jq`, `rg` | jqlang/jq direct binary; BurntSushi/ripgrep musl tarball |
-| `spotify-player` | `spotify_player` | aome510/spotify-player tarball |
+| `spotify-player` | `spogo` | steipete/spogo tarball (Go binary; uses Spotify Web API cookies) |
 | `summarize` | `summarize` | **Not available on Linux** — brew-only; skip with note |
 
 ---

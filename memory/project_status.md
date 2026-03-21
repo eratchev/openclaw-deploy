@@ -4,7 +4,7 @@ description: Current feature completion status and deployment state
 type: project
 ---
 
-Features shipped to origin/main as of 2026-03-19:
+Features shipped to origin/main as of 2026-03-21:
 - Gmail integration (mail-proxy) — complete
 - Google Calendar proxy — complete
 - Contacts lookup — complete
@@ -12,6 +12,7 @@ Features shipped to origin/main as of 2026-03-19:
 - Self-updating memory — complete
 - Attendee management (gcal --attendee flag, invite via Google Calendar API) — complete
 - Heartbeat + morning cron — complete
+- Spotify skill (spogo) — complete; uses browser cookies (sp_dc + sp_t), PATH fix in docker-compose
 
 **Why:** Tracking feature completion so future sessions know what's done vs. remaining.
 
