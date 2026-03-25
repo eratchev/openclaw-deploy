@@ -336,20 +336,28 @@ The domain must match the `DOMAIN` value in `.env` and must be reachable over HT
 
 ## 10. Google Calendar Setup
 
-See the full setup guide: `docs/plans/2026-03-03-google-calendar.md`
+```bash
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json
+```
 
-High-level steps:
-1. Authenticate locally on Mac: `python3 scripts/auth_setup.py`
-2. Encrypt the token: `python3 scripts/encrypt_token.py`
-3. Copy `gcal_token.enc` to the VPS volume and set ownership:
-   ```bash
-   sudo chown 1000:1000 /path/to/volume/gcal_token.enc
-   ```
-4. Set `GCAL_TOKEN_ENCRYPTION_KEY` in `.env` on the VPS.
-5. Start the calendar proxy: `make up-calendar`
-6. Configure exec approvals (once): `make setup-approvals`
+This runs the OAuth flow locally, encrypts the token, copies it to the VPS, updates `.env` with `GCAL_TOKEN_ENCRYPTION_KEY_PERSONAL` and `GCAL_ACCOUNTS=personal`, and restarts calendar-proxy.
 
-`make doctor` reports `calendar-proxy` status (optional — skip if not started).
+**Add a second account:**
+
+```bash
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json ACCOUNT=jobs
+```
+
+Adds `jobs` to `GCAL_ACCOUNTS` and writes `GCAL_TOKEN_ENCRYPTION_KEY_JOBS` without touching existing accounts.
+
+**Start:**
+
+```bash
+make up-calendar
+make setup-approvals   # once — registers gcal on the exec allowlist
+```
+
+`make doctor` reports per-account token status.
 
 ---
 

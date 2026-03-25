@@ -105,6 +105,14 @@ make setup-gcal CLIENT_SECRET=path/to/client_secret.json
 
 This generates a Fernet encryption key, runs the Google OAuth browser flow, encrypts the token, copies it to the VPS, updates `.env`, and restarts the calendar-proxy. Requires `client_secret.json` from Google Cloud Console (see below).
 
+**Multiple accounts:** Add a second account with `ACCOUNT=<label>`:
+
+```bash
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json ACCOUNT=jobs
+```
+
+The agent selects an account via `gcal --account jobs list`. Omitting `--account` uses the default (first entry in `GCAL_ACCOUNTS`).
+
 **Additional `.env` vars (add via `make deploy` or manually):**
 
 ```bash
@@ -139,6 +147,14 @@ This generates a Fernet encryption key, runs the Google OAuth browser flow (requ
 
 Requires `client_secret.json` from Google Cloud Console (same project as Calendar if using both — see below).
 
+**Multiple accounts:** Add a second account with `ACCOUNT=<label>`:
+
+```bash
+make setup-gmail CLIENT_SECRET=path/to/client_secret.json ACCOUNT=jobs
+```
+
+The agent selects an account via `gmail --account jobs list`. Omitting `--account` uses the default (first entry in `GMAIL_ACCOUNTS`).
+
 **Start:**
 
 ```bash
@@ -155,6 +171,7 @@ make up-mail
 | `gmail reply --thread-id ID --message-id ID --body "..."` | Reply to thread |
 | `gmail send --to EMAIL --subject "..." --body "..." --confirmed` | Send new email |
 | `gmail mark-read --message-id ID` | Mark as read |
+| `gmail --account jobs list` | Use a non-default account |
 
 **Proactive notifications:**
 
