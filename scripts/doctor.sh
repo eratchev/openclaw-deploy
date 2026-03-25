@@ -143,10 +143,39 @@ fi
 echo ""
 echo " Google Calendar"
 
-if sudo docker compose exec -T openclaw test -f /home/node/.openclaw/gcal_token.enc 2>/dev/null; then
-    pass "gcal_token.enc  present"
+if [ -n "${GCAL_ACCOUNTS:-}" ]; then
+    if [ -n "${GCAL_TOKEN_ENCRYPTION_KEY_PERSONAL:-}${GCAL_TOKEN_ENCRYPTION_KEY_JOBS:-}" ] || \
+       [ -n "${GCAL_TOKEN_ENCRYPTION_KEY:-}" ]; then
+        pass "GCAL_TOKEN_ENCRYPTION_KEY_*  set"
+    else
+        warn "No GCAL_TOKEN_ENCRYPTION_KEY_* vars found — run: make setup-gcal ACCOUNT=personal CLIENT_SECRET=..."
+    fi
+    IFS=',' read -ra _gcal_accounts <<< "$GCAL_ACCOUNTS"
+    for _acct in "${_gcal_accounts[@]}"; do
+        _acct=$(echo "$_acct" | tr -d ' ')
+        if sudo docker compose --profile calendar exec -T calendar-proxy test -f "/data/gcal_token.${_acct}.enc" 2>/dev/null; then
+            pass "gcal:${_acct}  token present"
+        else
+            warn "gcal:${_acct}  token missing → run: make setup-gcal ACCOUNT=${_acct} CLIENT_SECRET=..."
+        fi
+    done
+    cal_health=$(sudo docker compose --profile calendar exec -T calendar-proxy python3 -c \
+        "import urllib.request; import json; r=urllib.request.urlopen('http://localhost:8080/health',timeout=3); print(json.load(r)['configured'])" \
+        2>/dev/null || echo "")
+    if [ "$cal_health" = "True" ]; then
+        pass "calendar-proxy  /health → configured"
+    elif sudo docker compose ps --format '{{.Name}}' 2>/dev/null | grep -q "calendar-proxy"; then
+        warn "calendar-proxy  running but /health unreachable"
+    else
+        skip "calendar-proxy  not started → run: make up-calendar"
+    fi
 else
-    skip "gcal_token.enc  not configured  →  see docs/plans/2026-03-03-google-calendar.md"
+    # Legacy single-account check
+    if sudo docker compose exec -T openclaw test -f /home/node/.openclaw/gcal_token.enc 2>/dev/null; then
+        pass "gcal_token.enc  present (legacy)"
+    else
+        skip "Google Calendar  not configured → run: make setup-gcal CLIENT_SECRET=..."
+    fi
 fi
 
 # ── Gmail ──────────────────────────────────────────────────────────────────────
@@ -154,8 +183,22 @@ fi
 echo ""
 echo " Gmail"
 
-if [ -n "${GMAIL_TOKEN_ENCRYPTION_KEY:-}" ]; then
-    pass "GMAIL_TOKEN_ENCRYPTION_KEY  set"
+if [ -n "${GMAIL_ACCOUNTS:-}" ]; then
+    if [ -n "${GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL:-}${GMAIL_TOKEN_ENCRYPTION_KEY_JOBS:-}" ] || \
+       [ -n "${GMAIL_TOKEN_ENCRYPTION_KEY:-}" ]; then
+        pass "GMAIL_TOKEN_ENCRYPTION_KEY_*  set"
+    else
+        warn "No GMAIL_TOKEN_ENCRYPTION_KEY_* vars found — run: make setup-gmail ACCOUNT=personal CLIENT_SECRET=..."
+    fi
+    IFS=',' read -ra _gmail_accounts <<< "$GMAIL_ACCOUNTS"
+    for _acct in "${_gmail_accounts[@]}"; do
+        _acct=$(echo "$_acct" | tr -d ' ')
+        if sudo docker compose --profile mail exec -T mail-proxy test -f "/data/gmail_token.${_acct}.enc" 2>/dev/null; then
+            pass "gmail:${_acct}  token present"
+        else
+            warn "gmail:${_acct}  token missing → run: make setup-gmail ACCOUNT=${_acct} CLIENT_SECRET=..."
+        fi
+    done
     mail_health=$(sudo docker compose --profile mail exec -T mail-proxy python3 -c \
         "import urllib.request; import json; r=urllib.request.urlopen('http://localhost:8091/health',timeout=3); print(json.load(r)['configured'])" \
         2>/dev/null || echo "")
@@ -164,10 +207,15 @@ if [ -n "${GMAIL_TOKEN_ENCRYPTION_KEY:-}" ]; then
     elif sudo docker compose ps --format '{{.Name}}' 2>/dev/null | grep -q "mail-proxy"; then
         warn "mail-proxy  running but /health unreachable"
     else
-        skip "mail-proxy  not started  →  run: make up-mail"
+        skip "mail-proxy  not started → run: make up-mail"
     fi
 else
-    skip "Gmail  not configured  →  run: make setup-gmail CLIENT_SECRET=..."
+    # Legacy single-account check
+    if [ -n "${GMAIL_TOKEN_ENCRYPTION_KEY:-}" ]; then
+        warn "GMAIL_TOKEN_ENCRYPTION_KEY set but GMAIL_ACCOUNTS not configured → run: make setup-gmail CLIENT_SECRET=... to migrate"
+    else
+        skip "Gmail  not configured → run: make setup-gmail CLIENT_SECRET=..."
+    fi
 fi
 
 # ── Skills ─────────────────────────────────────────────────────────────────────
