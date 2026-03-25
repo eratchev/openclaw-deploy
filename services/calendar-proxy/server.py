@@ -300,10 +300,11 @@ def create_event(title: str, start: str, end: str, execution_mode: str,
                  calendar_id: str = "primary", description: str = None,
                  recurrence_rrule: str = None, idempotency_key: str = None,
                  confirmed: bool = False,
-                 attendees: list[str] = None) -> dict:
+                 attendees: list[str] = None,
+                 account: str = "") -> dict:
     """Create a Google Calendar event."""
     args = {"title": title, "start": start, "end": end, "execution_mode": execution_mode,
-            "calendar_id": calendar_id, "confirmed": confirmed}
+            "calendar_id": calendar_id, "confirmed": confirmed, "account": account}
     if description:
         args["description"] = description
     if recurrence_rrule:
@@ -317,31 +318,35 @@ def create_event(title: str, start: str, end: str, execution_mode: str,
 
 
 @mcp.tool()
-def list_events(time_min: str, time_max: str, calendar_id: str = "primary") -> list:
+def list_events(time_min: str, time_max: str, calendar_id: str = "primary",
+                account: str = "") -> list:
     """List Google Calendar events in a time window."""
-    return handle_list_events({"time_min": time_min, "time_max": time_max, "calendar_id": calendar_id})
+    return handle_list_events({"time_min": time_min, "time_max": time_max,
+                               "calendar_id": calendar_id, "account": account})
 
 
 @mcp.tool()
-def check_availability(time_min: str, time_max: str, duration_minutes: int) -> dict:
+def check_availability(time_min: str, time_max: str, duration_minutes: int,
+                       account: str = "") -> dict:
     """Find free slots in a time window."""
     inp = CheckAvailabilityInput(time_min=time_min, time_max=time_max, duration_minutes=duration_minutes)
-    service = build_google_service()
+    service = build_google_service(account)
     existing = _list_events_fn(service)("primary", inp.time_min, inp.time_max)
     return {"events": existing, "duration_requested_minutes": duration_minutes}
 
 
 @mcp.tool()
 def delete_event(event_id: str, execution_mode: str, calendar_id: str = "primary",
-                 idempotency_key: str = None, confirmed: bool = False) -> dict:
+                 idempotency_key: str = None, confirmed: bool = False,
+                 account: str = "") -> dict:
     """Delete a Google Calendar event. Set confirmed=True after showing the user the impact."""
     event_input = DeleteEventInput(event_id=event_id, execution_mode=execution_mode,
                                    calendar_id=calendar_id, idempotency_key=idempotency_key,
                                    confirmed=confirmed)
-    result = _run_write_pipeline(event_input, op="delete", is_delete=True)
+    result = _run_write_pipeline(event_input, op="delete", is_delete=True, account=account)
     if result is not None:
         return result
-    service = build_google_service()
+    service = build_google_service(account)
     service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
     idem_key = idempotency_key or idempotency_key_for("delete", event_input.model_dump())
     record_idempotency(get_redis(), idem_key, event_id=event_id)
