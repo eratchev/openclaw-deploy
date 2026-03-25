@@ -102,6 +102,14 @@ gcal avail --from "YYYY-MM-DDTHH:MM:SS-08:00" --to "YYYY-MM-DDTHH:MM:SS-08:00" -
 
 **Timezone:** Pacific Time (America/Los_Angeles). Use ISO 8601 offsets in all gcal commands.
 
+#### Multiple accounts
+
+`gcal` supports multiple Google accounts. Use `--account <label>` before the subcommand:
+```
+gcal --account jobs list --from "2026-04-01T00:00:00Z" --to "2026-04-01T23:59:59Z"
+```
+Available labels: `personal` (default), `jobs`. Omit `--account` to use the default.
+
 **CRITICAL: Never use bash or shell commands.** Bash is disabled — calling it will fail.
 - For gcal: use exec with `{"command": "gcal ...", "workdir": "/home/node/.openclaw/workspace"}`
 - For gmail: use exec with `{"command": "gmail ...", "workdir": "/home/node/.openclaw/workspace"}`
@@ -133,6 +141,16 @@ gmail send --to EMAIL --subject "..." --body "..." --confirmed
 gmail mark-read --message-id ID
 gmail health
 ```
+
+#### Multiple accounts
+
+`gmail` supports multiple Google accounts. Use `--account <label>` before the subcommand:
+```
+gmail --account jobs list --limit 5
+gmail --account personal search --query "from:bank.com"
+```
+Available labels: `personal` (default), `jobs`. Omit `--account` to use the default (`personal`).
+Ask the user which account they mean when context is ambiguous.
 
 ---
 
