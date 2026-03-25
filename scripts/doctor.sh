@@ -99,7 +99,9 @@ if [ -n "${TELEGRAM_TOKEN:-}" ]; then
         webhook_url=$(echo "$webhook_info" | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['url'])" 2>/dev/null)
         pending=$(echo "$webhook_info" | python3 -c "import sys,json; print(json.load(sys.stdin)['result'].get('pending_update_count',0))" 2>/dev/null)
         webhook_err=$(echo "$webhook_info" | python3 -c "import sys,json; print(json.load(sys.stdin)['result'].get('last_error_message',''))" 2>/dev/null)
-        if [ -n "$webhook_err" ]; then
+        webhook_err_date=$(echo "$webhook_info" | python3 -c "import sys,json; print(json.load(sys.stdin)['result'].get('last_error_date',0))" 2>/dev/null)
+        now=$(date +%s)
+        if [ -n "$webhook_err" ] && [ "$((now - webhook_err_date))" -lt 600 ]; then
             warn "Telegram webhook  $webhook_url (last error: $webhook_err)"
         else
             pass "Telegram webhook  $webhook_url (pending: $pending)"
