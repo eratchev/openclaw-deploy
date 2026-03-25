@@ -37,7 +37,9 @@ class TokenStore:
         return cls(key=raw_key.encode(), token_path=path)
 
     @classmethod
-    def for_account(cls, label: str, service: str = "gmail") -> Optional["TokenStore"]:
+    def for_account(
+        cls, label: str, service: str = "gmail", token_dir: Path = Path("/data")
+    ) -> Optional["TokenStore"]:
         """Load TokenStore for a specific account label.
 
         - No key + no token file  → None (logs warning, caller skips this label)
@@ -45,7 +47,7 @@ class TokenStore:
         - Key present              → TokenStore
         """
         key_env = f"{service.upper()}_TOKEN_ENCRYPTION_KEY_{label.upper()}"
-        token_path = Path(f"/data/{service}_token.{label}.enc")
+        token_path = token_dir / f"{service}_token.{label}.enc"
         raw_key = os.environ.get(key_env)
         if not raw_key and not token_path.exists():
             logger.warning("[auth] No key and no token file for account %r — skipping", label)

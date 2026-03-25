@@ -57,7 +57,7 @@ def test_save_is_atomic(tmp_path, monkeypatch):
     assert store.load() == data
 
 
-def test_for_account_returns_none_when_no_key_no_file(tmp_path, monkeypatch):
+def test_for_account_returns_none_when_no_key_no_file(monkeypatch):
     monkeypatch.delenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", raising=False)
     import auth
     result = auth.TokenStore.for_account("personal")
@@ -66,16 +66,11 @@ def test_for_account_returns_none_when_no_key_no_file(tmp_path, monkeypatch):
 
 def test_for_account_raises_when_file_exists_but_no_key(tmp_path, monkeypatch):
     monkeypatch.delenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", raising=False)
-    # Create a fake token file at the expected path
     token_path = tmp_path / "gmail_token.personal.enc"
     token_path.write_bytes(b"dummy")
     import auth
-    # Patch the default path construction so it finds our tmp file
-    from unittest.mock import patch
-    with patch("auth.Path") as mock_path_cls:
-        mock_path_cls.side_effect = lambda p: token_path if "personal" in str(p) else type(token_path)(p)
-        with pytest.raises(RuntimeError, match="GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL"):
-            auth.TokenStore.for_account("personal")
+    with pytest.raises(RuntimeError, match="GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL"):
+        auth.TokenStore.for_account("personal", token_dir=tmp_path)
 
 
 def test_for_account_returns_store_when_key_set(monkeypatch):
