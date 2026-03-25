@@ -105,7 +105,7 @@ setup-heartbeat:
 	    --cron '0 9 * * *' \
 	    --tz 'America/Los_Angeles' \
 	    --session isolated \
-	    --message 'Read MEMORY_GUIDE.md for tool documentation. Then run the morning briefing: check today full calendar schedule (gcal list for today) and important unread emails from overnight (gmail list --limit 10). Compose a concise summary — events today with times, any email action items — and send it to Evgueni via Telegram.' || true && \
+	    --message 'Read MEMORY_GUIDE.md for tool documentation. Then run the morning briefing: check today full calendar schedule (gcal list for today) and important unread emails from overnight (gmail list --limit 10) and jobs emails (gmail --account jobs list --limit 10). Compose a concise summary — events today with times, any email action items from both accounts — and send it to Evgueni via Telegram.' || true && \
 	  echo 'Heartbeat and cron configured.'"
 
 # Apply inbound firewall rules on VPS (run once after deploy, or to re-apply)
