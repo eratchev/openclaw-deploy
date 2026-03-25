@@ -4,7 +4,7 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 # Load HOST from .deploy file written by 'make deploy'
 -include .deploy
 
-.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-heartbeat setup-egress setup-inbound setup-gcal setup-gmail setup-skills deploy-workspace deploy deploy-clis doctor pair-whatsapp
+.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-heartbeat setup-egress setup-inbound setup-gcal setup-gmail setup-skills deploy-workspace deploy deploy-clis push doctor pair-whatsapp
 
 # Start all services (caddy, openclaw, redis, voice-proxy).
 up:
@@ -151,6 +151,12 @@ kill-switch:
 deploy-clis:
 	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
 	@bash scripts/deploy-clis.sh "$(HOST)"
+
+# Push latest code to VPS and rebuild affected services (non-interactive).
+# Run this after every git push. Requires HOST from .deploy or HOST=user@x.x.x.x
+push:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	@bash scripts/push.sh "$(HOST)"
 
 # Deploy to a remote VPS from this local machine
 # Usage: make deploy HOST=user@x.x.x.x  (saved to .deploy for future targets)
