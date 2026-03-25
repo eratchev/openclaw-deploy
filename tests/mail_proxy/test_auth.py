@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import pytest
@@ -54,3 +55,74 @@ def test_save_is_atomic(tmp_path, monkeypatch):
     assert token_path.exists()
     assert not (tmp_path / "token.enc.tmp").exists()
     assert store.load() == data
+
+
+def test_for_account_returns_none_when_no_key_no_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", raising=False)
+    import auth
+    result = auth.TokenStore.for_account("personal")
+    assert result is None
+
+
+def test_for_account_raises_when_file_exists_but_no_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", raising=False)
+    # Create a fake token file at the expected path
+    token_path = tmp_path / "gmail_token.personal.enc"
+    token_path.write_bytes(b"dummy")
+    import auth
+    # Patch the default path construction so it finds our tmp file
+    from unittest.mock import patch
+    with patch("auth.Path") as mock_path_cls:
+        mock_path_cls.side_effect = lambda p: token_path if "personal" in str(p) else type(token_path)(p)
+        with pytest.raises(RuntimeError, match="GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL"):
+            auth.TokenStore.for_account("personal")
+
+
+def test_for_account_returns_store_when_key_set(monkeypatch):
+    key = Fernet.generate_key().decode()
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", key)
+    import auth
+    store = auth.TokenStore.for_account("personal")
+    assert store is not None
+
+
+def test_load_all_legacy_fallback_when_no_accounts_env(monkeypatch):
+    """No GMAIL_ACCOUNTS set + legacy key present → {"": store}."""
+    monkeypatch.delenv("GMAIL_ACCOUNTS", raising=False)
+    key = Fernet.generate_key().decode()
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY", key)
+    import auth
+    result = auth.TokenStore.load_all()
+    assert "" in result
+    assert result[""] is not None
+
+
+def test_load_all_empty_when_no_accounts_and_no_legacy(monkeypatch):
+    monkeypatch.delenv("GMAIL_ACCOUNTS", raising=False)
+    monkeypatch.delenv("GMAIL_TOKEN_ENCRYPTION_KEY", raising=False)
+    import auth
+    result = auth.TokenStore.load_all()
+    assert result == {}
+
+
+def test_load_all_loads_configured_accounts(monkeypatch):
+    monkeypatch.setenv("GMAIL_ACCOUNTS", "personal,jobs")
+    key1 = Fernet.generate_key().decode()
+    key2 = Fernet.generate_key().decode()
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", key1)
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_JOBS", key2)
+    import auth
+    result = auth.TokenStore.load_all()
+    assert set(result.keys()) == {"personal", "jobs"}
+
+
+def test_load_all_skips_missing_account(monkeypatch, caplog):
+    monkeypatch.setenv("GMAIL_ACCOUNTS", "personal,jobs")
+    key1 = Fernet.generate_key().decode()
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", key1)
+    monkeypatch.delenv("GMAIL_TOKEN_ENCRYPTION_KEY_JOBS", raising=False)
+    import auth
+    with caplog.at_level(logging.WARNING, logger="auth"):
+        result = auth.TokenStore.load_all()
+    assert "personal" in result
+    assert "jobs" not in result
