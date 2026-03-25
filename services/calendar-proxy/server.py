@@ -27,7 +27,9 @@ DRY_RUN = os.getenv("GCAL_DRY_RUN", "false").lower() == "true"
 if DRY_RUN:
     print("[calendar-proxy] [WARN] *** DRY_RUN MODE ACTIVE — no calendar writes will be executed ***", flush=True)
 
-token_store = TokenStore.from_env()
+token_stores = TokenStore.load_all()
+CONFIGURED = len(token_stores) > 0
+DEFAULT_ACCOUNT = list(token_stores.keys())[0] if token_stores else ""
 audit = AuditLog(log_path=Path(os.getenv("GCAL_AUDIT_LOG_PATH", "/data/calendar-audit.log")))
 mcp = FastMCP("calendar-proxy", host="0.0.0.0", port=8080)
 
@@ -37,8 +39,14 @@ def get_redis() -> redis_lib.Redis:
     return redis_lib.from_url(os.getenv("REDIS_URL", "redis://redis:6379"))
 
 
-def build_google_service():
-    token_data = token_store.load()
+def build_google_service(account: str = ""):
+    label = account if account else DEFAULT_ACCOUNT
+    store = token_stores.get(label)
+    if store is None:
+        raise ValueError(
+            f"unknown account {label!r}, available: {list(token_stores.keys())}"
+        )
+    token_data = store.load()
     creds = Credentials(
         token=token_data.get("token"),
         refresh_token=token_data.get("refresh_token"),
@@ -50,7 +58,7 @@ def build_google_service():
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(GoogleAuthRequest())
-            token_store.save({
+            store.save({
                 "token": creds.token,
                 "refresh_token": creds.refresh_token,
                 "token_uri": creds.token_uri,
@@ -88,7 +96,7 @@ def _today_date_str() -> str:
     return datetime.now(tz).strftime("%Y-%m-%d")
 
 
-def _run_write_pipeline(event_input, op: str, is_delete: bool = False):
+def _run_write_pipeline(event_input, op: str, is_delete: bool = False, account: str = ""):
     """Shared validate → assess → enforce → execute pipeline for write tools."""
     request_id = str(uuid.uuid4())
     start_ms = time.monotonic()
@@ -103,7 +111,7 @@ def _run_write_pipeline(event_input, op: str, is_delete: bool = False):
 
     # Assess — only build the Google service if we need to list existing events
     if hasattr(event_input, "title"):
-        impact = assess(event_input, _list_events_fn(build_google_service()))
+        impact = assess(event_input, _list_events_fn(build_google_service(account)))
     else:
         impact = None
 
@@ -171,12 +179,13 @@ def _created_by_tag() -> str:
 
 
 def handle_create_event(args: dict) -> dict:
+    account = args.pop("account", "")
     event_input = CreateEventInput(**args)
-    result = _run_write_pipeline(event_input, op="create")
+    result = _run_write_pipeline(event_input, op="create", account=account)
     if result is not None:
         return result
     # Execute
-    service = build_google_service()
+    service = build_google_service(account)
     body = {"summary": event_input.title, "start": {"dateTime": event_input.start},
             "end": {"dateTime": event_input.end}}
     created_by = _created_by_tag()
@@ -208,29 +217,36 @@ def handle_create_event(args: dict) -> dict:
 
 
 def handle_list_events(args: dict) -> list:
+    account = args.pop("account", "")
     inp = ListEventsInput(**args)
-    service = build_google_service()
+    service = build_google_service(account)
     return _list_events_fn(service)(inp.calendar_id, inp.time_min, inp.time_max)
 
 
 def get_health() -> dict:
-    health: dict[str, Any] = {"dry_run_mode": os.getenv("GCAL_DRY_RUN", "false").lower() == "true"}
+    health: dict[str, Any] = {
+        "configured": CONFIGURED,
+        "dry_run_mode": os.getenv("GCAL_DRY_RUN", "false").lower() == "true",
+        "accounts": {},
+    }
+    for label, store in token_stores.items():
+        display = label if label else "default"
+        try:
+            store.load()
+            health["accounts"][display] = "ok"
+        except Exception as exc:
+            health["accounts"][display] = f"error: {exc}"
     try:
         get_redis().ping()
         health["redis"] = "ok"
-    except Exception as e:
-        health["redis"] = f"error: {e}"
-    try:
-        token_store.load()
-        health["token"] = "ok"
-    except Exception as e:
-        health["token"] = f"error: {e}"
+    except Exception as exc:
+        health["redis"] = f"error: {exc}"
     if os.getenv("GCAL_HEALTH_CHECK_GOOGLE", "false").lower() == "true":
         try:
-            build_google_service()
+            build_google_service()  # uses default account
             health["google_api"] = "ok"
-        except Exception as e:
-            health["google_api"] = f"error: {e}"
+        except Exception as exc:
+            health["google_api"] = f"error: {exc}"
     else:
         health["google_api"] = "skipped"
     health["reminders_enabled"] = (
@@ -347,18 +363,20 @@ _TOOL_HANDLERS = {
 
 
 def _handle_check_availability(args: dict) -> dict:
+    account = args.pop("account", "")
     inp = CheckAvailabilityInput(**args)
-    service = build_google_service()
+    service = build_google_service(account)
     existing = _list_events_fn(service)("primary", inp.time_min, inp.time_max)
     return {"events": existing, "duration_requested_minutes": inp.duration_minutes}
 
 
 def _handle_delete_event(args: dict) -> dict:
+    account = args.pop("account", "")
     event_input = DeleteEventInput(**args)
-    result = _run_write_pipeline(event_input, op="delete", is_delete=True)
+    result = _run_write_pipeline(event_input, op="delete", is_delete=True, account=account)
     if result is not None:
         return result
-    service = build_google_service()
+    service = build_google_service(account)
     service.events().delete(calendarId=event_input.calendar_id, eventId=event_input.event_id).execute()
     idem_key = event_input.idempotency_key or idempotency_key_for("delete", event_input.model_dump())
     record_idempotency(get_redis(), idem_key, event_id=event_input.event_id)
@@ -381,20 +399,33 @@ async def http_health(request: Request) -> JSONResponse:
 @mcp.custom_route("/call", methods=["POST"])
 async def http_call(request: Request) -> JSONResponse:
     """Call a calendar tool by name. Body: {\"tool\": \"<name>\", \"args\": {...}}"""
+    account = request.query_params.get("account", "")
     try:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "invalid JSON"}, status_code=400)
     tool = body.get("tool")
     args = body.get("args", {})
+    args["account"] = account
     handler = _TOOL_HANDLERS.get(tool)
     if handler is None:
-        return JSONResponse({"error": f"unknown tool: {tool}", "available": list(_TOOL_HANDLERS)}, status_code=404)
+        return JSONResponse(
+            {"error": f"unknown tool: {tool}", "available": list(_TOOL_HANDLERS)},
+            status_code=404,
+        )
     try:
         result = handler(args)
         return JSONResponse(result)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+    except ValueError as exc:
+        if "unknown account" in str(exc):
+            return JSONResponse(
+                {"error": "unknown_account", "message": str(exc),
+                 "available": list(token_stores.keys())},
+                status_code=400,
+            )
+        return JSONResponse({"error": str(exc)}, status_code=500)
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 _start_reminders()

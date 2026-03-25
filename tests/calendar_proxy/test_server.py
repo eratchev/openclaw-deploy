@@ -5,6 +5,7 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 import fakeredis
+from cryptography.fernet import Fernet
 
 
 def _future_date() -> str:
@@ -85,14 +86,13 @@ def test_list_events_returns_list(monkeypatch, mock_env):
 
 def test_health_returns_token_and_redis_status(monkeypatch, mock_env, tmp_path):
     with patch("server.get_redis") as mock_redis, \
-         patch("server.token_store") as mock_store:
+         patch("server.token_stores", {}):
         mock_redis.return_value = fakeredis.FakeRedis()
-        mock_store.load.return_value = {"access_token": "tok"}
 
         import server
         health = server.get_health()
         assert "redis" in health
-        assert "token" in health
+        assert "accounts" in health
         assert health["dry_run_mode"] is False
 
 
@@ -120,9 +120,8 @@ def test_start_reminders_no_op_without_telegram(monkeypatch, mock_env):
 
 def test_health_includes_reminders_enabled(monkeypatch, mock_env):
     with patch("server.get_redis") as mock_redis, \
-         patch("server.token_store") as mock_store:
+         patch("server.token_stores", {}):
         mock_redis.return_value = fakeredis.FakeRedis()
-        mock_store.load.return_value = {}
 
         import server
         health = server.get_health()
@@ -257,3 +256,53 @@ def test_attendees_absent_from_audit_write_call(monkeypatch, mock_env, tmp_path)
     entries = [_json.loads(line) for line in log_path.read_text().strip().splitlines()]
     for entry in entries:
         assert "attendees" not in entry.get("args", {})
+
+
+def test_health_returns_configured_false_when_no_accounts(monkeypatch, tmp_path):
+    monkeypatch.delenv("GCAL_TOKEN_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("GCAL_ACCOUNTS", raising=False)
+    monkeypatch.setenv("GCAL_AUDIT_LOG_PATH", str(tmp_path / "audit.log"))
+    monkeypatch.setenv("GCAL_DISABLE_REMINDERS", "true")
+    import importlib, server as s_mod
+    importlib.reload(s_mod)
+    from starlette.testclient import TestClient
+    client = TestClient(s_mod.mcp.sse_app())
+    resp = client.get("/health")
+    assert resp.json()["configured"] is False
+
+
+def test_health_returns_accounts_dict_when_configured(monkeypatch, tmp_path):
+    monkeypatch.setenv("GCAL_ACCOUNTS", "personal,jobs")
+    key1 = Fernet.generate_key().decode()
+    key2 = Fernet.generate_key().decode()
+    monkeypatch.setenv("GCAL_TOKEN_ENCRYPTION_KEY_PERSONAL", key1)
+    monkeypatch.setenv("GCAL_TOKEN_ENCRYPTION_KEY_JOBS", key2)
+    monkeypatch.setenv("GCAL_AUDIT_LOG_PATH", str(tmp_path / "audit.log"))
+    monkeypatch.setenv("GCAL_DISABLE_REMINDERS", "true")
+    import importlib, server as s_mod
+    importlib.reload(s_mod)
+    from starlette.testclient import TestClient
+    client = TestClient(s_mod.mcp.sse_app())
+    resp = client.get("/health")
+    data = resp.json()
+    assert data["configured"] is True
+    assert "personal" in data.get("accounts", {})
+    assert "jobs" in data.get("accounts", {})
+
+
+def test_call_returns_error_for_unknown_account(monkeypatch, tmp_path):
+    monkeypatch.setenv("GCAL_ACCOUNTS", "personal")
+    key1 = Fernet.generate_key().decode()
+    monkeypatch.setenv("GCAL_TOKEN_ENCRYPTION_KEY_PERSONAL", key1)
+    monkeypatch.setenv("GCAL_AUDIT_LOG_PATH", str(tmp_path / "audit.log"))
+    monkeypatch.setenv("GCAL_DISABLE_REMINDERS", "true")
+    import importlib, server as s_mod
+    importlib.reload(s_mod)
+    from starlette.testclient import TestClient
+    client = TestClient(s_mod.mcp.sse_app())
+    resp = client.post("/call?account=nonexistent",
+                       json={"tool": "list_events",
+                             "args": {"time_min": "2026-01-01T00:00:00Z",
+                                      "time_max": "2026-01-02T00:00:00Z"}})
+    data = resp.json()
+    assert data.get("error") == "unknown_account"

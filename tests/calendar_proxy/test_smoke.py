@@ -43,7 +43,7 @@ def setup_env(monkeypatch, tmp_path):
                 "client_id": "id", "client_secret": "sec", "scopes": []})
 
     import server
-    monkeypatch.setattr(server, "token_store", store)
+    monkeypatch.setattr(server, "token_stores", {"": store})
 
 
 def test_smoke_create_dry_run_simple_event():
