@@ -164,19 +164,19 @@ doctor:
 	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
 	@ssh "$(HOST)" "cd ~/openclaw-deploy && bash scripts/doctor.sh"
 
-# Set up Google Calendar OAuth (run locally on Mac, requires client_secret.json)
-# Usage: make setup-gcal CLIENT_SECRET=path/to/client_secret.json
+# Usage: make setup-gcal CLIENT_SECRET=path/to/client_secret.json [ACCOUNT=label]
+# No ACCOUNT= : migrate existing single-account setup to 'personal'
+# ACCOUNT=jobs : set up a new 'jobs' account via OAuth
 setup-gcal:
-	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
-	@[ -n "$(CLIENT_SECRET)" ] || (echo "Usage: make setup-gcal CLIENT_SECRET=path/to/client_secret.json" && exit 1)
-	@bash scripts/setup-gcal.sh "$(HOST)" "$(CLIENT_SECRET)"
+	@[ -n "$(CLIENT_SECRET)" ] || (echo "Usage: make setup-gcal CLIENT_SECRET=path/to/client_secret.json [ACCOUNT=label]" && exit 1)
+	@bash scripts/setup-gcal.sh "$(HOST)" "$(CLIENT_SECRET)" "$(ACCOUNT)"
 
-# Set up Gmail OAuth and exec approvals (run locally on Mac, requires client_secret.json)
-# Usage: make setup-gmail CLIENT_SECRET=path/to/client_secret.json
+# Usage: make setup-gmail CLIENT_SECRET=path/to/client_secret.json [ACCOUNT=label]
+# No ACCOUNT= : migrate existing single-account setup to 'personal'
+# ACCOUNT=jobs : set up a new 'jobs' account via OAuth
 setup-gmail:
-	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
-	@[ -n "$(CLIENT_SECRET)" ] || (echo "Usage: make setup-gmail CLIENT_SECRET=path/to/client_secret.json" && exit 1)
-	@bash scripts/setup-gmail.sh "$(HOST)" "$(CLIENT_SECRET)"
+	@[ -n "$(CLIENT_SECRET)" ] || (echo "Usage: make setup-gmail CLIENT_SECRET=path/to/client_secret.json [ACCOUNT=label]" && exit 1)
+	@bash scripts/setup-gmail.sh "$(HOST)" "$(CLIENT_SECRET)" "$(ACCOUNT)"
 
 # Install OpenClaw skill CLIs into the container (run once after deploy)
 # Opt-in per skill. Usage: make setup-skills [SKILLS="github session-logs spotify-player"]

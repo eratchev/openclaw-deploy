@@ -1,14 +1,19 @@
 #!/bin/bash
-# One-shot Gmail setup. Run locally on your Mac.
-# Usage: bash scripts/setup-gmail.sh user@host path/to/client_secret.json
+# Multi-account Gmail setup. Run locally on your Mac.
+# Usage:
+#   bash scripts/setup-gmail.sh user@host path/to/client_secret.json [account_label]
+#
+# With no account_label: migrates existing single-account setup to 'personal'
+# With account_label:    runs OAuth flow for that account (e.g. ACCOUNT=jobs)
 set -euo pipefail
 
 HOST="${1:-}"
 CLIENT_SECRET="${2:-}"
 CLIENT_SECRET="${CLIENT_SECRET/#\~/$HOME}"
+ACCOUNT="${3:-}"
 
 if [ -z "$HOST" ] || [ -z "$CLIENT_SECRET" ]; then
-    echo "Usage: $0 user@host path/to/client_secret.json"
+    echo "Usage: $0 user@host path/to/client_secret.json [account_label]"
     exit 1
 fi
 
@@ -26,82 +31,105 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TMPDIR_LOCAL=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_LOCAL"' EXIT
 
-# ── Step 1: Generate encryption key ──────────────────────────────────────────
-step "Generating Fernet encryption key"
+# ── Migration mode (no ACCOUNT arg) ──────────────────────────────────────────
+if [ -z "$ACCOUNT" ]; then
+    step "Migration mode: renaming existing single-account setup to 'personal'"
+    # Rename token file on VPS
+    ssh "$HOST" "
+        DATA=/var/lib/docker/volumes/openclaw-deploy_openclaw_data/_data
+        if [ -f \"\$DATA/gmail_token.enc\" ]; then
+            sudo mv \"\$DATA/gmail_token.enc\" \"\$DATA/gmail_token.personal.enc\"
+            sudo chown 1000:1000 \"\$DATA/gmail_token.personal.enc\"
+            echo 'Token file renamed'
+        else
+            echo 'No legacy gmail_token.enc found — already migrated?'
+        fi
+    "
+    # Rename env var in .env
+    ssh "$HOST" "
+        cd ~/openclaw-deploy
+        if grep -q '^GMAIL_TOKEN_ENCRYPTION_KEY=' .env; then
+            KEY=\$(grep '^GMAIL_TOKEN_ENCRYPTION_KEY=' .env | cut -d= -f2-)
+            sed -i '/^GMAIL_TOKEN_ENCRYPTION_KEY=/d' .env
+            sed -i '/^GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL=/d' .env
+            echo \"GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL=\$KEY\" >> .env
+            echo 'Env var renamed'
+        else
+            echo 'GMAIL_TOKEN_ENCRYPTION_KEY not found — already migrated?'
+        fi
+        # Add GMAIL_ACCOUNTS=personal if not already set
+        if ! grep -q '^GMAIL_ACCOUNTS=' .env; then
+            echo 'GMAIL_ACCOUNTS=personal' >> .env
+            echo 'GMAIL_ACCOUNTS set'
+        fi
+    "
+    ok "Migration complete (personal)"
+    step "Restarting mail-proxy"
+    ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose --profile mail up -d --force-recreate mail-proxy"
+    ok "mail-proxy restarted"
+    echo ""
+    echo -e "${BOLD}Migration complete. Run 'make doctor' to verify.${NC}"
+    exit 0
+fi
+
+LABEL_UPPER=$(echo "$ACCOUNT" | tr '[:lower:]' '[:upper:]')
+
+# ── New account OAuth flow ────────────────────────────────────────────────────
+step "Generating Fernet encryption key for account '$ACCOUNT'"
 KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 ok "Key generated"
 
-# ── Step 2: OAuth browser flow ────────────────────────────────────────────────
-step "Authenticating with Google (browser will open)"
+step "Authenticating with Google for account '$ACCOUNT' (browser will open)"
 python3 "$REPO_DIR/services/mail-proxy/scripts/auth_setup.py" \
     --client-secret "$CLIENT_SECRET" \
     --out "$TMPDIR_LOCAL/token.json"
 ok "Token received"
 
-# ── Step 3: Encrypt token ─────────────────────────────────────────────────────
 step "Encrypting token"
 cd "$REPO_DIR"
 python3 services/mail-proxy/scripts/encrypt_token.py \
     --token "$TMPDIR_LOCAL/token.json" \
     --key "$KEY" \
-    --out "$TMPDIR_LOCAL/gmail_token.enc"
+    --out "$TMPDIR_LOCAL/gmail_token.${ACCOUNT}.enc"
 ok "Token encrypted"
 
-# ── Step 4: Copy token to VPS ─────────────────────────────────────────────────
-step "Copying gmail_token.enc to VPS"
-scp "$TMPDIR_LOCAL/gmail_token.enc" "$HOST:/tmp/gmail_token.enc"
-ssh "$HOST" "sudo cp /tmp/gmail_token.enc /var/lib/docker/volumes/openclaw-deploy_openclaw_data/_data/gmail_token.enc \
-    && sudo chown 1000:1000 /var/lib/docker/volumes/openclaw-deploy_openclaw_data/_data/gmail_token.enc \
-    && rm -f /tmp/gmail_token.enc"
+step "Copying gmail_token.${ACCOUNT}.enc to VPS"
+scp "$TMPDIR_LOCAL/gmail_token.${ACCOUNT}.enc" "$HOST:/tmp/gmail_token.${ACCOUNT}.enc"
+ssh "$HOST" "
+    sudo cp /tmp/gmail_token.${ACCOUNT}.enc \
+        /var/lib/docker/volumes/openclaw-deploy_openclaw_data/_data/gmail_token.${ACCOUNT}.enc
+    sudo chown 1000:1000 \
+        /var/lib/docker/volumes/openclaw-deploy_openclaw_data/_data/gmail_token.${ACCOUNT}.enc
+    rm -f /tmp/gmail_token.${ACCOUNT}.enc
+"
 ok "Token deployed to VPS volume"
 
-# ── Step 5: Update .env on VPS ───────────────────────────────────────────────
-step "Updating GMAIL_TOKEN_ENCRYPTION_KEY in .env"
-# Note: double-quoted SSH string expands $KEY locally before sending to remote shell.
-# Single-quoted echo inside ensures the key value (which may contain special chars) is safe.
-ssh "$HOST" "sed -i '/^GMAIL_TOKEN_ENCRYPTION_KEY=/d' ~/openclaw-deploy/.env && echo 'GMAIL_TOKEN_ENCRYPTION_KEY=$KEY' >> ~/openclaw-deploy/.env"
-ok "Key written to .env"
+step "Updating .env on VPS"
+ssh "$HOST" "
+    cd ~/openclaw-deploy
+    # Write/overwrite the per-label encryption key
+    sed -i '/^GMAIL_TOKEN_ENCRYPTION_KEY_${LABEL_UPPER}=/d' .env
+    echo 'GMAIL_TOKEN_ENCRYPTION_KEY_${LABEL_UPPER}=${KEY}' >> .env
 
-# ── Step 6: Install gmail CLI into openclaw container ────────────────────────
-step "Installing gmail CLI into openclaw container"
-scp "$REPO_DIR/services/mail-proxy/scripts/gmail" "$HOST:/tmp/gmail"
-ssh "$HOST" "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml cp /tmp/gmail openclaw:/home/node/.openclaw/bin/gmail \
-    && sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw chmod +x /home/node/.openclaw/bin/gmail \
-    && rm -f /tmp/gmail"
-ok "gmail CLI installed at /home/node/.openclaw/bin/gmail"
+    # Add label to GMAIL_ACCOUNTS (idempotent)
+    if grep -q '^GMAIL_ACCOUNTS=' .env; then
+        if ! grep -qE '^GMAIL_ACCOUNTS=.*\b${ACCOUNT}\b' .env; then
+            sed -i 's/^GMAIL_ACCOUNTS=\(.*\)/GMAIL_ACCOUNTS=\1,${ACCOUNT}/' .env
+        fi
+    else
+        echo 'GMAIL_ACCOUNTS=${ACCOUNT}' >> .env
+    fi
+"
+ok "Key written to .env, '$ACCOUNT' added to GMAIL_ACCOUNTS"
 
-# ── Step 6b: Install contacts CLI into openclaw container ─────────────────────
-step "Installing contacts CLI into openclaw container"
-scp "$REPO_DIR/services/mail-proxy/scripts/contacts" "$HOST:/tmp/contacts"
-ssh "$HOST" "sudo docker compose -f ~/openclaw-deploy/docker-compose.yml cp /tmp/contacts openclaw:/home/node/.openclaw/bin/contacts \
-    && sudo docker compose -f ~/openclaw-deploy/docker-compose.yml exec -T openclaw chmod +x /home/node/.openclaw/bin/contacts \
-    && rm -f /tmp/contacts"
-ok "contacts CLI installed at /home/node/.openclaw/bin/contacts"
-
-# ── Step 7: Register gmail + contacts CLIs on exec approvals allowlist ─────────
-step "Registering gmail + contacts CLIs on exec approvals allowlist"
-ssh "$HOST" "cd ~/openclaw-deploy && \
-    sudo docker compose exec -T openclaw openclaw approvals allowlist add '/home/node/.openclaw/bin/gmail' --agent main --gateway && \
-    sudo docker compose exec -T openclaw openclaw approvals allowlist add 'gmail' --agent main --gateway && \
-    sudo docker compose exec -T openclaw openclaw approvals allowlist add 'gmail *' --agent main --gateway && \
-    sudo docker compose exec -T openclaw openclaw approvals allowlist add '/home/node/.openclaw/bin/contacts' --agent main --gateway && \
-    sudo docker compose exec -T openclaw openclaw approvals allowlist add 'contacts' --agent main --gateway && \
-    sudo docker compose exec -T openclaw openclaw approvals allowlist add 'contacts *' --agent main --gateway && \
-    sudo docker compose exec -T openclaw openclaw config set tools.exec.safeBins '[\"gcal\",\"date\",\"ai\",\"gmail\",\"contacts\"]' && \
-    sudo docker compose exec -T openclaw openclaw config set tools.exec.safeBinProfiles.gmail '{}' && \
-    sudo docker compose exec -T openclaw openclaw config set tools.exec.safeBinProfiles.contacts '{}' && \
-    sudo docker compose restart openclaw"
-ok "gmail + contacts CLIs registered on allowlist"
-
-# ── Step 8: Pull latest code + start mail-proxy ───────────────────────────────
 step "Pulling latest code on VPS"
 ssh "$HOST" "cd ~/openclaw-deploy && git pull --ff-only"
 ok "Code updated"
 
-step "Starting mail-proxy"
-ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose --profile mail up -d --build mail-proxy"
-ok "mail-proxy started"
+step "Restarting mail-proxy"
+ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose --profile mail up -d --force-recreate mail-proxy"
+ok "mail-proxy restarted"
 
 echo ""
-echo -e "${BOLD}Gmail setup complete.${NC}"
+echo -e "${BOLD}Gmail setup complete for account '$ACCOUNT'.${NC}"
 echo "  Run 'make doctor' to verify."
