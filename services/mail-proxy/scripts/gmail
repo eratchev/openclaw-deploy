@@ -2,12 +2,12 @@
 """gmail — CLI for the mail-proxy service.
 
 Usage:
-  gmail list    [--limit N] [--label LABEL]
-  gmail get     --thread-id ID
-  gmail search  --query "..." [--limit N]
-  gmail reply   --thread-id ID --message-id ID --body "..."
-  gmail send    --to EMAIL --subject "..." --body "..." [--confirmed]
-  gmail mark-read --message-id ID
+  gmail [--account LABEL] list    [--limit N] [--label LABEL]
+  gmail [--account LABEL] get     --thread-id ID
+  gmail [--account LABEL] search  --query "..." [--limit N]
+  gmail [--account LABEL] reply   --thread-id ID --message-id ID --body "..."
+  gmail [--account LABEL] send    --to EMAIL --subject "..." --body "..." [--confirmed]
+  gmail [--account LABEL] mark-read --message-id ID
   gmail health
 """
 import json
@@ -18,10 +18,13 @@ import urllib.error
 BASE_URL = "http://mail-proxy:8091"
 
 
-def _call(tool: str, args: dict) -> dict:
+def _call(tool: str, args: dict, account: str = "") -> dict:
+    url = f"{BASE_URL}/call"
+    if account:
+        url += f"?account={account}"
     payload = json.dumps({"tool": tool, "args": args}).encode()
     req = urllib.request.Request(
-        f"{BASE_URL}/call",
+        url,
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -67,6 +70,15 @@ def main():
         print(__doc__)
         sys.exit(0)
 
+    # Extract optional --account flag before the subcommand
+    account = ""
+    if len(argv) >= 2 and argv[0] == "--account":
+        account = argv[1]
+        argv = argv[2:]
+        if not argv:
+            print(__doc__)
+            sys.exit(0)
+
     cmd = argv[0]
     rest = argv[1:]
 
@@ -78,13 +90,13 @@ def main():
             args["limit"] = int(_flag(rest, "--limit"))
         if _flag(rest, "--label"):
             args["label"] = _flag(rest, "--label")
-        result = _call("list", args)
+        result = _call("list", args, account=account)
     elif cmd == "get":
         thread_id = _flag(rest, "--thread-id")
         if not thread_id:
             print("Error: --thread-id is required", file=sys.stderr)
             sys.exit(1)
-        result = _call("get", {"thread_id": thread_id})
+        result = _call("get", {"thread_id": thread_id}, account=account)
     elif cmd == "search":
         query = _flag(rest, "--query")
         if not query:
@@ -93,7 +105,7 @@ def main():
         args = {"query": query}
         if _flag(rest, "--limit"):
             args["limit"] = int(_flag(rest, "--limit"))
-        result = _call("search", args)
+        result = _call("search", args, account=account)
     elif cmd == "reply":
         thread_id = _flag(rest, "--thread-id")
         message_id = _flag(rest, "--message-id")
@@ -102,7 +114,7 @@ def main():
             print("Error: --thread-id, --message-id, and --body are required", file=sys.stderr)
             sys.exit(1)
         body = _unescape_body(body)
-        result = _call("reply", {"thread_id": thread_id, "message_id": message_id, "body": body})
+        result = _call("reply", {"thread_id": thread_id, "message_id": message_id, "body": body}, account=account)
     elif cmd == "send":
         to = _flag(rest, "--to")
         subject = _flag(rest, "--subject")
@@ -114,13 +126,13 @@ def main():
         result = _call("send", {
             "to": to, "subject": subject, "body": body,
             "confirmed": "--confirmed" in rest,
-        })
+        }, account=account)
     elif cmd == "mark-read":
         message_id = _flag(rest, "--message-id")
         if not message_id:
             print("Error: --message-id is required", file=sys.stderr)
             sys.exit(1)
-        result = _call("mark_read", {"message_id": message_id})
+        result = _call("mark_read", {"message_id": message_id}, account=account)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         print(__doc__, file=sys.stderr)

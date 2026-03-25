@@ -2,12 +2,12 @@
 """gcal — CLI for the calendar-proxy service.
 
 Usage:
-  gcal create  --title TITLE --start ISO --end ISO --mode (execute|dry_run)
-               [--confirmed] [--calendar-id ID] [--description TEXT] [--rrule RULE]
-               [--idem-key KEY] [--attendee EMAIL] ...
-  gcal list    --from ISO --to ISO [--calendar-id ID]
-  gcal delete  --event-id ID --mode (execute|dry_run) [--confirmed] [--calendar-id ID]
-  gcal avail   --from ISO --to ISO --minutes N
+  gcal [--account LABEL] create  --title TITLE --start ISO --end ISO --mode (execute|dry_run)
+                                 [--confirmed] [--calendar-id ID] [--description TEXT] [--rrule RULE]
+                                 [--idem-key KEY] [--attendee EMAIL] ...
+  gcal [--account LABEL] list    --from ISO --to ISO [--calendar-id ID]
+  gcal [--account LABEL] delete  --event-id ID --mode (execute|dry_run) [--confirmed] [--calendar-id ID]
+  gcal [--account LABEL] avail   --from ISO --to ISO --minutes N
   gcal health
 """
 import json
@@ -18,10 +18,13 @@ import urllib.error
 BASE_URL = "http://calendar-proxy:8080"
 
 
-def _call(tool: str, args: dict) -> dict:
+def _call(tool: str, args: dict, account: str = "") -> dict:
+    url = f"{BASE_URL}/call"
+    if account:
+        url += f"?account={account}"
     payload = json.dumps({"tool": tool, "args": args}).encode()
     req = urllib.request.Request(
-        f"{BASE_URL}/call",
+        url,
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -72,6 +75,15 @@ def main():
         print(__doc__)
         sys.exit(0)
 
+    # Extract optional --account flag before the subcommand
+    account = ""
+    if len(argv) >= 2 and argv[0] == "--account":
+        account = argv[1]
+        argv = argv[2:]
+        if not argv:
+            print(__doc__)
+            sys.exit(0)
+
     cmd = argv[0]
     rest = argv[1:]
 
@@ -97,7 +109,7 @@ def main():
         attendees = _collect_flags(rest, "--attendee")
         if attendees:
             args["attendees"] = attendees
-        result = _call("create_event", args)
+        result = _call("create_event", args, account=account)
     elif cmd == "list":
         time_from = _parse_flag(rest, "--from")
         time_to = _parse_flag(rest, "--to")
@@ -108,7 +120,7 @@ def main():
             "time_min": time_from,
             "time_max": time_to,
             "calendar_id": _parse_flag(rest, "--calendar-id", "primary"),
-        })
+        }, account=account)
     elif cmd == "delete":
         event_id = _parse_flag(rest, "--event-id")
         mode = _parse_flag(rest, "--mode", "dry_run")
@@ -120,7 +132,7 @@ def main():
             "execution_mode": mode,
             "calendar_id": _parse_flag(rest, "--calendar-id", "primary"),
             "confirmed": "--confirmed" in rest,
-        })
+        }, account=account)
     elif cmd == "avail":
         time_from = _parse_flag(rest, "--from")
         time_to = _parse_flag(rest, "--to")
@@ -132,7 +144,7 @@ def main():
             "time_min": time_from,
             "time_max": time_to,
             "duration_minutes": int(minutes),
-        })
+        }, account=account)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         print(__doc__, file=sys.stderr)
