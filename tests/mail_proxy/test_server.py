@@ -15,6 +15,7 @@ def _make_app(monkeypatch, configured=True):
         monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY", key)
     else:
         monkeypatch.delenv("GMAIL_TOKEN_ENCRYPTION_KEY", raising=False)
+        monkeypatch.delenv("GMAIL_ACCOUNTS", raising=False)
 
     import importlib
     import server
@@ -25,6 +26,7 @@ def _make_app(monkeypatch, configured=True):
 def test_health_returns_ok_when_degraded(monkeypatch, tmp_path):
     monkeypatch.setenv("GMAIL_DISABLE_POLLER", "true")
     monkeypatch.delenv("GMAIL_TOKEN_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("GMAIL_ACCOUNTS", raising=False)
     import importlib, server as s_mod
     importlib.reload(s_mod)
     client = TestClient(s_mod.mcp.get_app())
@@ -37,6 +39,7 @@ def test_health_returns_ok_when_degraded(monkeypatch, tmp_path):
 def test_call_returns_not_configured_when_degraded(monkeypatch):
     monkeypatch.setenv("GMAIL_DISABLE_POLLER", "true")
     monkeypatch.delenv("GMAIL_TOKEN_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("GMAIL_ACCOUNTS", raising=False)
     import importlib, server as s_mod
     importlib.reload(s_mod)
     client = TestClient(s_mod.mcp.get_app())
@@ -55,7 +58,10 @@ def test_call_list_returns_messages(monkeypatch):
                       "unread": True}]
     import importlib, server as s_mod
     importlib.reload(s_mod)
-    s_mod.token_store = MagicMock()
+    mock_store = MagicMock()
+    s_mod.token_stores = {"": mock_store}
+    s_mod.DEFAULT_ACCOUNT = ""
+    s_mod.CONFIGURED = True
 
     with patch("server.gmail_client.list_messages", return_value=fake_messages), \
          patch("server.gmail_client.build_service", return_value=MagicMock()), \
@@ -76,7 +82,10 @@ def test_call_send_denied_without_confirmation(monkeypatch):
 
     import importlib, server as s_mod, fakeredis
     importlib.reload(s_mod)
-    s_mod.token_store = MagicMock()
+    mock_store = MagicMock()
+    s_mod.token_stores = {"": mock_store}
+    s_mod.DEFAULT_ACCOUNT = ""
+    s_mod.CONFIGURED = True
 
     r = fakeredis.FakeRedis(decode_responses=False)
     import time
@@ -99,7 +108,10 @@ def test_call_unknown_tool_returns_404(monkeypatch):
     monkeypatch.setenv("GMAIL_DISABLE_POLLER", "true")
     import importlib, server as s_mod
     importlib.reload(s_mod)
-    s_mod.token_store = MagicMock()
+    mock_store = MagicMock()
+    s_mod.token_stores = {"": mock_store}
+    s_mod.DEFAULT_ACCOUNT = ""
+    s_mod.CONFIGURED = True
     client = TestClient(s_mod.mcp.get_app())
     resp = client.post("/call", json={"tool": "nonexistent", "args": {}})
     assert resp.status_code == 404
@@ -111,8 +123,56 @@ def test_health_returns_redis_status(monkeypatch):
     monkeypatch.setenv("GMAIL_DISABLE_POLLER", "true")
     import importlib, server as s_mod
     importlib.reload(s_mod)
-    s_mod.token_store = MagicMock()
+    mock_store = MagicMock()
+    s_mod.token_stores = {"": mock_store}
+    s_mod.DEFAULT_ACCOUNT = ""
+    s_mod.CONFIGURED = True
     with patch("server.get_redis", return_value=fakeredis.FakeRedis()):
         client = TestClient(s_mod.mcp.get_app())
         resp = client.get("/health")
     assert resp.json()["redis"] == "ok"
+
+
+def test_health_returns_accounts_dict(monkeypatch):
+    monkeypatch.setenv("GMAIL_DISABLE_POLLER", "true")
+    monkeypatch.setenv("GMAIL_ACCOUNTS", "personal,jobs")
+    key1 = Fernet.generate_key().decode()
+    key2 = Fernet.generate_key().decode()
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", key1)
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_JOBS", key2)
+    import importlib, server as s_mod
+    importlib.reload(s_mod)
+    client = TestClient(s_mod.mcp.get_app())
+    resp = client.get("/health")
+    data = resp.json()
+    assert data["configured"] is True
+    assert "accounts" in data
+    assert "personal" in data["accounts"]
+    assert "jobs" in data["accounts"]
+
+
+def test_call_returns_error_for_unknown_account(monkeypatch):
+    monkeypatch.setenv("GMAIL_DISABLE_POLLER", "true")
+    monkeypatch.setenv("GMAIL_ACCOUNTS", "personal")
+    key1 = Fernet.generate_key().decode()
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", key1)
+    import importlib, server as s_mod
+    importlib.reload(s_mod)
+    client = TestClient(s_mod.mcp.get_app())
+    resp = client.post("/call?account=nonexistent", json={"tool": "list", "args": {}})
+    data = resp.json()
+    assert data["error"] == "unknown_account"
+    assert "available" in data
+
+
+def test_call_uses_default_account_when_no_param(monkeypatch):
+    monkeypatch.setenv("GMAIL_DISABLE_POLLER", "true")
+    monkeypatch.setenv("GMAIL_ACCOUNTS", "personal,jobs")
+    key1 = Fernet.generate_key().decode()
+    key2 = Fernet.generate_key().decode()
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL", key1)
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_JOBS", key2)
+    import importlib, server as s_mod
+    importlib.reload(s_mod)
+    # Default account is first = "personal"
+    assert s_mod.DEFAULT_ACCOUNT == "personal"
