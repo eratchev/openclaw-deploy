@@ -67,6 +67,14 @@ Renders a QR code in your terminal. Scan with WhatsApp on your phone.
 make doctor
 ```
 
+**Deploy code changes** (after every `git push`):
+
+```bash
+make push
+```
+
+Pulls latest code on the VPS, rebuilds running service containers, updates CLI binaries, and deploys workspace files. Non-interactive — safe to run at any time.
+
 ## Security Model
 
 This deployment shifts OpenClaw's execution risk to containment. OpenClaw can execute arbitrary code via skills and tools — the hardening around it prevents that from compromising the host.

@@ -334,7 +334,33 @@ The domain must match the `DOMAIN` value in `.env` and must be reachable over HT
 
 ---
 
-## 10. Google Calendar Setup
+## 10. Gmail Setup
+
+```bash
+make setup-gmail CLIENT_SECRET=path/to/client_secret.json
+```
+
+This runs the OAuth flow locally, encrypts the token, copies it to the VPS, updates `.env` with `GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL` and `GMAIL_ACCOUNTS=personal`, registers `gmail` on the exec allowlist, and starts mail-proxy.
+
+**Add a second account:**
+
+```bash
+make setup-gmail CLIENT_SECRET=path/to/client_secret.json ACCOUNT=jobs
+```
+
+Appends `jobs` to `GMAIL_ACCOUNTS` and writes `GMAIL_TOKEN_ENCRYPTION_KEY_JOBS` without touching existing accounts.
+
+**Start:**
+
+```bash
+make up-mail
+```
+
+`make doctor` reports per-account token status.
+
+---
+
+## 11. Google Calendar Setup
 
 ```bash
 make setup-gcal CLIENT_SECRET=path/to/client_secret.json
@@ -361,7 +387,7 @@ make setup-approvals   # once — registers gcal on the exec allowlist
 
 ---
 
-## 11. Secret Rotation
+## 12. Secret Rotation
 
 Rotate secrets one at a time to avoid simultaneous downtime.
 

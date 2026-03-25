@@ -4,23 +4,48 @@ MCP server that gives OpenClaw controlled Google Calendar access. Runs on the in
 
 ## First Deploy
 
-See the [README](../README.md#google-calendar-integration) for the one-time OAuth setup (key generation, token auth, encryption, copy to VPS).
-
-Required `.env` additions on the VPS before `make up`:
+Run from your local machine:
 
 ```bash
-GCAL_TOKEN_ENCRYPTION_KEY=<fernet-key>
-GCAL_USER_TIMEZONE=Europe/Helsinki   # your local timezone
-GCAL_ALLOWED_CALENDARS=primary       # comma-separated calendar IDs
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json
 ```
+
+This generates a Fernet key, runs the OAuth browser flow, encrypts the token, copies it to the VPS, and updates `.env` with `GCAL_TOKEN_ENCRYPTION_KEY_PERSONAL` and `GCAL_ACCOUNTS=personal`.
+
+Add optional tuning to `.env` on the VPS:
+
+```bash
+GCAL_USER_TIMEZONE=America/Los_Angeles  # your local timezone
+GCAL_ALLOWED_CALENDARS=primary          # comma-separated calendar IDs
+```
+
+### Multiple Accounts
+
+Add a second account without re-running setup for the first:
+
+```bash
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json ACCOUNT=jobs
+```
+
+This appends `jobs` to `GCAL_ACCOUNTS` and writes `GCAL_TOKEN_ENCRYPTION_KEY_JOBS`. Token files are named `gcal_token.<label>.enc` (e.g. `gcal_token.personal.enc`).
+
+The `gcal` CLI selects an account with `--account <label>` before the subcommand:
+
+```bash
+gcal --account jobs list --from "..." --to "..."
+```
+
+Omitting `--account` uses the first label in `GCAL_ACCOUNTS` (the default account).
 
 ## Configuration Reference
 
-All variables have safe defaults. Only `GCAL_TOKEN_ENCRYPTION_KEY` is required.
+All variables have safe defaults. Either `GCAL_TOKEN_ENCRYPTION_KEY` (legacy single-account) or `GCAL_ACCOUNTS` + per-account keys are required.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GCAL_TOKEN_ENCRYPTION_KEY` | — | **Required.** Fernet key for OAuth token encryption |
+| `GCAL_ACCOUNTS` | — | Comma-separated account labels (e.g. `personal,jobs`). First label is the default. |
+| `GCAL_TOKEN_ENCRYPTION_KEY_<LABEL>` | — | Fernet key for account `<LABEL>` (e.g. `GCAL_TOKEN_ENCRYPTION_KEY_PERSONAL`) |
+| `GCAL_TOKEN_ENCRYPTION_KEY` | — | Legacy single-account key. Used when `GCAL_ACCOUNTS` is not set. |
 | `GCAL_ALLOWED_CALENDARS` | `primary` | Comma-separated calendar IDs that may be written to |
 | `GCAL_WORK_CALENDAR_ID` | _(unset)_ | Calendar treated as work — any write requires confirmation |
 | `GCAL_USER_TIMEZONE` | `UTC` | Timezone for business hours + weekend evaluation |
@@ -58,24 +83,14 @@ Expected response:
 
 Google OAuth tokens expire. The proxy refreshes them automatically using the stored `refresh_token` and writes the updated token back atomically (encrypt → tmp → rename). No manual intervention needed under normal operation.
 
-If the refresh token itself expires (e.g. Google revokes it after 6 months of inactivity, or you revoke access in Google's security settings), you will see `token: "error: ..."` in the health check. Re-run the one-time setup:
+If the refresh token itself expires (e.g. Google revokes it after 6 months of inactivity, or you revoke access in Google's security settings), you will see `token: "error: ..."` in the health check. Re-authenticate by re-running setup for the affected account:
 
 ```bash
-# On your local machine
-python3 services/calendar-proxy/scripts/auth_setup.py \
-  --client-secret client_secret.json --out token.json
+# Re-authenticate the personal account
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json ACCOUNT=personal
 
-python3 services/calendar-proxy/scripts/encrypt_token.py \
-  --token token.json --key <GCAL_TOKEN_ENCRYPTION_KEY> --out token.enc
-
-scp token.enc user@<vps>:/tmp/
-ssh user@<vps> "
-  docker run --rm \
-    -v openclaw-deploy_openclaw_data:/data \
-    -v /tmp:/src \
-    busybox sh -c 'cp /src/token.enc /data/gcal_token.enc && chmod 600 /data/gcal_token.enc'
-"
-rm client_secret.json token.json token.enc
+# Re-authenticate the jobs account
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json ACCOUNT=jobs
 ```
 
 No container restart needed — the proxy reads the token file on each request.
@@ -151,17 +166,19 @@ docker compose exec redis redis-cli -a "$REDIS_PASSWORD" \
 
 ### Container fails to start — `Missing GCAL_TOKEN_ENCRYPTION_KEY`
 
-`GCAL_TOKEN_ENCRYPTION_KEY` is not set in `.env`. Generate and add it:
+Neither `GCAL_ACCOUNTS` nor `GCAL_TOKEN_ENCRYPTION_KEY` is set. Run the first-time setup:
 
 ```bash
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# Add GCAL_TOKEN_ENCRYPTION_KEY=<output> to .env
-docker compose up -d
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json
 ```
 
 ### Health check shows `token: "error: ..."`
 
-Either the token file is missing from `/data/gcal_token.enc` or the encryption key doesn't match. Re-run the token setup steps above.
+The token file is missing or the encryption key doesn't match. Re-run setup for the affected account:
+
+```bash
+make setup-gcal CLIENT_SECRET=path/to/client_secret.json ACCOUNT=personal
+```
 
 ### Health check shows `redis: "error: ..."`
 
