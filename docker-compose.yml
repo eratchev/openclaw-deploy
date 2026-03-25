@@ -104,6 +104,8 @@ services:
       - redis
     volumes:
       - openclaw_data:/data:rw
+    env_file:
+      - .env
     environment:
       - GCAL_ALLOWED_CALENDARS=${GCAL_ALLOWED_CALENDARS:-primary}
       - GCAL_MAX_EVENTS_PER_DAY=${GCAL_MAX_EVENTS_PER_DAY:-10}
@@ -118,7 +120,6 @@ services:
       - GCAL_AUDIT_MAX_MB=${GCAL_AUDIT_MAX_MB:-50}
       - GCAL_DRY_RUN=${GCAL_DRY_RUN:-false}
       - GCAL_HEALTH_CHECK_GOOGLE=${GCAL_HEALTH_CHECK_GOOGLE:-false}
-      - GCAL_TOKEN_ENCRYPTION_KEY=${GCAL_TOKEN_ENCRYPTION_KEY:-}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - ALERT_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID:-}
@@ -151,8 +152,9 @@ services:
       - redis
     volumes:
       - openclaw_data:/data:rw
+    env_file:
+      - .env
     environment:
-      - GMAIL_TOKEN_ENCRYPTION_KEY=${GMAIL_TOKEN_ENCRYPTION_KEY:-}
       - GMAIL_POLL_INTERVAL_SECONDS=${GMAIL_POLL_INTERVAL_SECONDS:-180}
       - GMAIL_IMPORTANCE_THRESHOLD=${GMAIL_IMPORTANCE_THRESHOLD:-7}
       - GMAIL_MAX_SENDS_PER_DAY=${GMAIL_MAX_SENDS_PER_DAY:-20}
