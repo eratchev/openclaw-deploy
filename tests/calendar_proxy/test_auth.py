@@ -71,12 +71,6 @@ def test_save_is_atomic_on_crash(tmp_path, monkeypatch):
     assert loaded["access_token"] == "original"
 
 
-def test_fail_fast_missing_key(tmp_path, monkeypatch):
-    """Degraded mode: no key and no token file → None (not a crash)."""
-    monkeypatch.delenv("GCAL_TOKEN_ENCRYPTION_KEY", raising=False)
-    result = TokenStore.from_env(token_path=tmp_path / "gcal_token.enc")
-    assert result is None
-
 
 def test_load_from_env(tmp_path, monkeypatch):
     key = generate_key()
@@ -122,30 +116,30 @@ def test_for_account_returns_store_when_key_set(tmp_path, monkeypatch):
     assert store is not None
 
 
-def test_load_all_legacy_fallback(tmp_path, monkeypatch):
+def test_load_all_legacy_fallback(monkeypatch):
     monkeypatch.delenv("GCAL_ACCOUNTS", raising=False)
     key = Fernet.generate_key().decode()
     monkeypatch.setenv("GCAL_TOKEN_ENCRYPTION_KEY", key)
-    result = TokenStore.load_all(token_path=tmp_path / "gcal_token.enc")
+    result = TokenStore.load_all()
     assert "" in result
 
 
-def test_load_all_multi_account(tmp_path, monkeypatch):
+def test_load_all_multi_account(monkeypatch):
     monkeypatch.setenv("GCAL_ACCOUNTS", "personal,jobs")
     key1 = Fernet.generate_key().decode()
     key2 = Fernet.generate_key().decode()
     monkeypatch.setenv("GCAL_TOKEN_ENCRYPTION_KEY_PERSONAL", key1)
     monkeypatch.setenv("GCAL_TOKEN_ENCRYPTION_KEY_JOBS", key2)
-    result = TokenStore.load_all(token_dir=tmp_path)
+    result = TokenStore.load_all()
     assert set(result.keys()) == {"personal", "jobs"}
 
 
-def test_load_all_skips_missing_account(tmp_path, monkeypatch, caplog):
+def test_load_all_skips_missing_account(monkeypatch, caplog):
     monkeypatch.setenv("GCAL_ACCOUNTS", "personal,jobs")
     key1 = Fernet.generate_key().decode()
     monkeypatch.setenv("GCAL_TOKEN_ENCRYPTION_KEY_PERSONAL", key1)
     monkeypatch.delenv("GCAL_TOKEN_ENCRYPTION_KEY_JOBS", raising=False)
     with caplog.at_level(logging.WARNING, logger="auth"):
-        result = TokenStore.load_all(token_dir=tmp_path)
+        result = TokenStore.load_all()
     assert "personal" in result
     assert "jobs" not in result

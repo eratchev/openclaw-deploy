@@ -64,23 +64,19 @@ class TokenStore:
         return cls(key=raw_key.encode(), token_path=token_path)
 
     @classmethod
-    def load_all(
-        cls,
-        token_path: Path = Path("/data/gcal_token.enc"),
-        token_dir: Path = Path("/data"),
-    ) -> dict[str, "TokenStore"]:
+    def load_all(cls) -> dict[str, "TokenStore"]:
         """Return {label: TokenStore} for all accounts in GCAL_ACCOUNTS.
 
         Falls back to single-account mode (label="") if GCAL_ACCOUNTS not set.
         """
         raw = os.environ.get("GCAL_ACCOUNTS", "").strip()
         if not raw:
-            store = cls.from_env(token_path=token_path)
+            store = cls.from_env()
             return {"": store} if store else {}
         labels = [lbl.strip() for lbl in raw.split(",") if lbl.strip()]
         result: dict[str, "TokenStore"] = {}
         for label in labels:
-            store = cls.for_account(label, token_dir=token_dir)
+            store = cls.for_account(label)
             if store is not None:
                 result[label] = store
         return result
