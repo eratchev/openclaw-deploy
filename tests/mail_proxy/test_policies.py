@@ -105,7 +105,6 @@ def test_update_seen_domains_uses_account_namespaced_key():
 def test_check_novel_domain_uses_account_namespaced_key():
     import policies
     r = _redis()
-    import time
     r.zadd("gmail:seen_domains:jobs", {"trusted.com": time.time()})
     ok, _ = policies.check_novel_domain(r, "a@trusted.com", account="jobs")
     assert ok is True
@@ -142,3 +141,9 @@ def test_legacy_keys_used_when_account_is_empty():
     policies.update_seen_domains(r, messages, account="")
     members = r.zrange("gmail:seen_domains", 0, -1)
     assert b"legacy.com" in members
+
+
+def test_seen_message_key_returns_namespaced_key_or_bare():
+    import policies
+    assert policies.seen_message_key("jobs", "msg-abc") == "gmail:seen:jobs:msg-abc"
+    assert policies.seen_message_key("", "msg-abc") == "gmail:seen:msg-abc"
