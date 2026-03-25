@@ -11,9 +11,15 @@ import redis as redis_lib
 
 logger = logging.getLogger(__name__)
 
-_HISTORY_ID_KEY = "gmail:historyId"
-_SEEN_PREFIX = "gmail:seen:"
 _SEEN_TTL = 3600  # 1 hour dedup window
+
+
+def _history_id_key(account: str) -> str:
+    return f"gmail:historyId:{account}" if account else "gmail:historyId"
+
+
+def _seen_key(account: str, message_id: str) -> str:
+    return f"gmail:seen:{account}:{message_id}" if account else f"gmail:seen:{message_id}"
 
 
 def _send_telegram(token: str, chat_id: str, text: str) -> None:
@@ -70,6 +76,7 @@ def poll_once(
     scorer,
     notify_fn: Callable[[list[dict]], None],
     poll_label: str,
+    account: str = "",
 ) -> None:
     """Single poll cycle: fetch new messages, score, notify.
 
@@ -80,14 +87,14 @@ def poll_once(
         logger.debug("Circuit breaker open — skipping poll cycle")
         return
 
-    history_id_bytes = r.get(_HISTORY_ID_KEY)
+    history_id_bytes = r.get(_history_id_key(account))
 
     if history_id_bytes is None:
         # First run: record current historyId, notify nothing
         profile = service.users().getProfile(userId="me").execute()
         current_id = str(profile.get("historyId", ""))
         if current_id:
-            r.set(_HISTORY_ID_KEY, current_id.encode())
+            r.set(_history_id_key(account), current_id.encode())
         return
 
     start_history_id = history_id_bytes.decode()
@@ -117,7 +124,7 @@ def poll_once(
                 candidate_ids.append(msg_id)
 
     # Filter already-deduped messages
-    fresh_ids = [mid for mid in candidate_ids if not r.exists(f"{_SEEN_PREFIX}{mid}")]
+    fresh_ids = [mid for mid in candidate_ids if not r.exists(_seen_key(account, mid))]
 
     if fresh_ids:
         # Fetch metadata for fresh messages
@@ -129,13 +136,13 @@ def poll_once(
 
             # Set dedup keys BEFORE notifying (crash-safe ordering)
             for msg in messages:
-                r.setex(f"{_SEEN_PREFIX}{msg['message_id']}", _SEEN_TTL, b"1")
+                r.setex(_seen_key(account, msg["message_id"]), _SEEN_TTL, b"1")
 
             if scored:
                 notify_fn(scored)
 
     # Update historyId last (after dedup keys are set)
-    r.set(_HISTORY_ID_KEY, new_id.encode())
+    r.set(_history_id_key(account), new_id.encode())
 
 
 def run_forever(
@@ -148,6 +155,7 @@ def run_forever(
     chat_id: str,
     poll_interval: int,
     poll_label: str,
+    account: str = "",
 ) -> None:
     """Blocking loop. Run in a daemon thread."""
     if not chat_id:
@@ -164,7 +172,7 @@ def run_forever(
             service = build_service_fn()
             was_open = scorer.is_circuit_open()
             poll_once(service=service, r=r, scorer=scorer,
-                      notify_fn=_notify, poll_label=poll_label)
+                      notify_fn=_notify, poll_label=poll_label, account=account)
             now_open = scorer.is_circuit_open()
             # Send Telegram alert the first time the circuit opens
             if now_open and not was_open and not _circuit_alert_sent:

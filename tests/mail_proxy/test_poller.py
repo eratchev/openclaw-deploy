@@ -198,3 +198,75 @@ def test_send_telegram_notification_formats_message():
     assert "Alice" in sent[0]["text"]
     assert "Budget approval" in sent[0]["text"]
     assert "Alice needs Q4 budget signed off." in sent[0]["text"]
+
+
+def test_poll_once_uses_account_namespaced_history_key():
+    """When account='personal', historyId stored under gmail:historyId:personal."""
+    import poller
+    r = _redis()
+    mock_service = MagicMock()
+    mock_service.users().getProfile().execute.return_value = {"historyId": "200"}
+
+    poller.poll_once(
+        service=mock_service,
+        r=r,
+        scorer=_make_scorer(),
+        notify_fn=lambda msgs: None,
+        poll_label="INBOX",
+        account="personal",
+    )
+    assert r.get("gmail:historyId:personal") == b"200"
+    assert r.get("gmail:historyId") is None  # legacy key not touched
+
+
+def test_poll_once_uses_account_namespaced_seen_key():
+    """Dedup key uses account namespace."""
+    import poller
+    r = _redis()
+    r.set("gmail:historyId:jobs", b"50")
+
+    mock_service = MagicMock()
+    mock_service.users().history().list().execute.return_value = {
+        "history": [{"messagesAdded": [{"message": {"id": "msg-new"}}]}],
+        "historyId": "51",
+    }
+    mock_service.users().messages().get().execute.return_value = {
+        "id": "msg-new", "threadId": "t1",
+        "payload": {"headers": [
+            {"name": "From", "value": "a@b.com"},
+            {"name": "Subject", "value": "Hi"},
+            {"name": "Date", "value": "Mon"},
+        ]},
+        "snippet": "hello",
+    }
+    scored = [{"message_id": "msg-new", "from_addr": "a@b.com",
+               "subject": "Hi", "score": 9}]
+    notify_calls = []
+
+    poller.poll_once(
+        service=mock_service, r=r,
+        scorer=_make_scorer(results=scored),
+        notify_fn=lambda msgs: notify_calls.append(msgs),
+        poll_label="INBOX",
+        account="jobs",
+    )
+    # Dedup key should be namespaced
+    assert r.exists("gmail:seen:jobs:msg-new")
+    assert not r.exists("gmail:seen:msg-new")
+
+
+def test_poll_once_legacy_keys_when_account_empty():
+    """account='' → old un-prefixed key names (backward compat)."""
+    import poller
+    r = _redis()
+    mock_service = MagicMock()
+    mock_service.users().getProfile().execute.return_value = {"historyId": "300"}
+
+    poller.poll_once(
+        service=mock_service, r=r,
+        scorer=_make_scorer(),
+        notify_fn=lambda msgs: None,
+        poll_label="INBOX",
+        account="",
+    )
+    assert r.get("gmail:historyId") == b"300"
