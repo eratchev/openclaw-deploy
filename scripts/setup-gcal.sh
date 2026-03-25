@@ -67,6 +67,11 @@ if [ -z "$ACCOUNT" ]; then
     step "Restarting calendar-proxy"
     ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose --profile calendar up -d --force-recreate calendar-proxy"
     ok "calendar-proxy restarted"
+    step "Updating MEMORY_GUIDE.md"
+    python3 "$SCRIPT_DIR/update-memory-accounts.py" gcal personal
+    scp "$REPO_DIR/workspace/MEMORY_GUIDE.md" "$HOST:/tmp/MEMORY_GUIDE.md"
+    ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose cp /tmp/MEMORY_GUIDE.md openclaw:/home/node/.openclaw/workspace/MEMORY_GUIDE.md && rm -f /tmp/MEMORY_GUIDE.md"
+    ok "MEMORY_GUIDE.md deployed"
     echo ""
     echo -e "${BOLD}Migration complete. Run 'make doctor' to verify.${NC}"
     exit 0
@@ -127,8 +132,15 @@ ssh "$HOST" "cd ~/openclaw-deploy && git pull --ff-only"
 ok "Code updated"
 
 step "Restarting calendar-proxy"
-ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose --profile calendar up -d --force-recreate calendar-proxy"
+ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose --profile calendar up -d --build calendar-proxy"
 ok "calendar-proxy restarted"
+
+step "Updating MEMORY_GUIDE.md"
+new_accounts=$(ssh "$HOST" "grep '^GCAL_ACCOUNTS=' ~/openclaw-deploy/.env | cut -d= -f2-" || echo "$ACCOUNT")
+python3 "$SCRIPT_DIR/update-memory-accounts.py" gcal "$new_accounts"
+scp "$REPO_DIR/workspace/MEMORY_GUIDE.md" "$HOST:/tmp/MEMORY_GUIDE.md"
+ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose cp /tmp/MEMORY_GUIDE.md openclaw:/home/node/.openclaw/workspace/MEMORY_GUIDE.md && rm -f /tmp/MEMORY_GUIDE.md"
+ok "MEMORY_GUIDE.md deployed"
 
 echo ""
 echo -e "${BOLD}Google Calendar setup complete for account '$ACCOUNT'.${NC}"
