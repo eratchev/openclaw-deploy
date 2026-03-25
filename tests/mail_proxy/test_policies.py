@@ -88,3 +88,57 @@ def test_extract_domain_handles_display_name():
     import policies
     assert policies._extract_domain("John Smith <john@acme.com>") == "acme.com"
     assert policies._extract_domain("plain@email.org") == "email.org"
+
+
+def test_update_seen_domains_uses_account_namespaced_key():
+    import policies
+    r = _redis()
+    messages = [{"from_addr": "alice@example.com"}]
+    policies.update_seen_domains(r, messages, account="jobs")
+    # Namespaced key should exist
+    members = r.zrange("gmail:seen_domains:jobs", 0, -1)
+    assert b"example.com" in members
+    # Legacy key should NOT exist
+    assert r.zrange("gmail:seen_domains", 0, -1) == []
+
+
+def test_check_novel_domain_uses_account_namespaced_key():
+    import policies
+    r = _redis()
+    import time
+    r.zadd("gmail:seen_domains:jobs", {"trusted.com": time.time()})
+    ok, _ = policies.check_novel_domain(r, "a@trusted.com", account="jobs")
+    assert ok is True
+    # Same domain not in "personal" namespace
+    ok2, _ = policies.check_novel_domain(r, "a@trusted.com", account="personal")
+    assert ok2 is False
+
+
+def test_check_rate_limit_uses_account_namespaced_key(monkeypatch):
+    import policies
+    monkeypatch.setenv("GMAIL_MAX_SENDS_PER_DAY", "2")
+    r = _redis()
+    r.set("gmail:sends:jobs:2026-03-24", "2")
+    ok, reason = policies.check_rate_limit(r, date_str="2026-03-24", account="jobs")
+    assert ok is False
+    # "personal" counter is independent
+    ok2, _ = policies.check_rate_limit(r, date_str="2026-03-24", account="personal")
+    assert ok2 is True
+
+
+def test_record_send_uses_account_namespaced_key():
+    import policies
+    r = _redis()
+    policies.record_send(r, date_str="2026-03-24", account="jobs")
+    assert r.get("gmail:sends:jobs:2026-03-24") == b"1"
+    assert r.get("gmail:sends:2026-03-24") is None
+
+
+def test_legacy_keys_used_when_account_is_empty():
+    """account="" → uses old un-prefixed key names (backward compat)."""
+    import policies
+    r = _redis()
+    messages = [{"from_addr": "x@legacy.com"}]
+    policies.update_seen_domains(r, messages, account="")
+    members = r.zrange("gmail:seen_domains", 0, -1)
+    assert b"legacy.com" in members
