@@ -12,6 +12,7 @@ Usage:
 """
 import json
 import sys
+import urllib.parse
 import urllib.request
 import urllib.error
 
@@ -21,7 +22,7 @@ BASE_URL = "http://calendar-proxy:8080"
 def _call(tool: str, args: dict, account: str = "") -> dict:
     url = f"{BASE_URL}/call"
     if account:
-        url += f"?account={account}"
+        url += "?" + urllib.parse.urlencode({"account": account})
     payload = json.dumps({"tool": tool, "args": args}).encode()
     req = urllib.request.Request(
         url,
@@ -77,7 +78,13 @@ def main():
 
     # Extract optional --account flag before the subcommand
     account = ""
-    if len(argv) >= 2 and argv[0] == "--account":
+    if argv[0] == "--account":
+        if len(argv) < 2:
+            print("Error: --account requires a value", file=sys.stderr)
+            sys.exit(1)
+        if argv[1].startswith("--"):
+            print(f"Error: --account requires a value, got flag {argv[1]!r}", file=sys.stderr)
+            sys.exit(1)
         account = argv[1]
         argv = argv[2:]
         if not argv:
