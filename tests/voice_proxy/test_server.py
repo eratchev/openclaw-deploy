@@ -96,7 +96,7 @@ async def test_voice_message_transcribed_and_forwarded(fake_redis):
 
     assert forwarded[0]["message"]["text"] == "hi there"
     assert forwarded[0]["message"]["voice_transcription"] is True
-    assert "voice" in forwarded[0]["message"]  # original voice field kept
+    assert "voice" not in forwarded[0]["message"]  # removed so agent doesn't re-transcribe
 
 
 async def test_transcription_failure_sends_fallback(fake_redis):

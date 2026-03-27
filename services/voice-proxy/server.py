@@ -75,7 +75,8 @@ def get_user_id(update: dict) -> Optional[int]:
 def mutate_update(update: dict, transcription: str) -> dict:
     """Return a deep copy of update with transcription injected as message.text.
 
-    Keeps the original voice/audio field intact (downstream may check it).
+    Removes voice/audio fields so the agent sees only text and does not
+    attempt to re-transcribe the audio itself.
     Adds voice_transcription=True flag.
     """
     mutated = copy.deepcopy(update)
@@ -87,6 +88,8 @@ def mutate_update(update: dict, transcription: str) -> dict:
         return mutated  # nothing to mutate; return unchanged deep copy
     mutated[msg_key]["text"] = transcription
     mutated[msg_key]["voice_transcription"] = True
+    mutated[msg_key].pop("voice", None)
+    mutated[msg_key].pop("audio", None)
     return mutated
 
 

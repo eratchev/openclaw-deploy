@@ -48,11 +48,16 @@ def test_mutate_update_adds_text():
     result = mutate_update(update, "hello world")
     assert result["message"]["text"] == "hello world"
 
-def test_mutate_update_keeps_voice_field():
+def test_mutate_update_removes_voice_field():
     update = {"message": {"voice": {"file_id": "abc"}, "chat": {"id": 1}}}
     result = mutate_update(update, "hello")
-    assert "voice" in result["message"]
-    assert result["message"]["voice"]["file_id"] == "abc"
+    assert "voice" not in result["message"]
+
+
+def test_mutate_update_removes_audio_field():
+    update = {"message": {"audio": {"file_id": "xyz"}, "chat": {"id": 1}}}
+    result = mutate_update(update, "hello")
+    assert "audio" not in result["message"]
 
 def test_mutate_update_sets_voice_transcription_flag():
     update = {"message": {"voice": {"file_id": "abc"}}}
