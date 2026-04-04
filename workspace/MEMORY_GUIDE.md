@@ -108,7 +108,7 @@ gcal avail --from "YYYY-MM-DDTHH:MM:SS-08:00" --to "YYYY-MM-DDTHH:MM:SS-08:00" -
 ```
 gcal --account jobs list --from "2026-04-01T00:00:00Z" --to "2026-04-01T23:59:59Z"
 ```
-Available labels: `personal` (default), `jobs`. Omit `--account` to use the default.
+Available labels: `personal` (default), `jobs`, `work`. Omit `--account` to use the default.
 
 **CRITICAL: Never use bash or shell commands.** Bash is disabled — calling it will fail.
 - For gcal: use exec with `{"command": "gcal ...", "workdir": "/home/node/.openclaw/workspace"}`
@@ -149,7 +149,7 @@ gmail health
 gmail --account jobs list --limit 5
 gmail --account personal search --query "from:bank.com"
 ```
-Available labels: `personal` (default), `jobs`. Omit `--account` to use the default (`personal`).
+Available labels: `personal` (default), `jobs`, `work`. Omit `--account` to use the default (`personal`).
 Ask the user which account they mean when context is ambiguous.
 
 ---
