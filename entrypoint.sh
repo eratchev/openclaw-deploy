@@ -56,6 +56,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
         --tz "America/Los_Angeles" \
         --session isolated \
         --announce \
+        --model "anthropic/claude-sonnet-4-6" \
         --thinking low \
         --timeout-seconds 480 \
         --channel telegram \
