@@ -32,21 +32,6 @@ if [ ! -f "$CONFIG_FILE" ]; then
         openclaw config set agents.main.provider anthropic || true
     fi
 
-    # ── Heartbeat ──────────────────────────────────────────────────────────────
-    # Runs every 60 min during active hours; Haiku model keeps costs low.
-    # agent reads HEARTBEAT.md for checklist
-    openclaw config set agents.defaults.heartbeat.every "60m"
-    openclaw config set agents.defaults.heartbeat.model "anthropic/claude-haiku-4-5-20251001"
-    openclaw config set agents.defaults.heartbeat.target "last"
-    openclaw config set agents.defaults.heartbeat.directPolicy "allow"
-    openclaw config set agents.defaults.heartbeat.activeHours.start "09:00"
-    openclaw config set agents.defaults.heartbeat.activeHours.end "22:00"
-    openclaw config set agents.defaults.heartbeat.activeHours.timezone "America/Los_Angeles"
-    # Explicit Telegram delivery target (Telegram chat ID) — set HEARTBEAT_TO in .env
-    if [ -n "${HEARTBEAT_TO:-}" ]; then
-        openclaw config set agents.defaults.heartbeat.to "${HEARTBEAT_TO}"
-    fi
-
     # ── Morning cron ────────────────────────────────────────────────────────────
     # --announce + --to: deliver the agent's final summary to the Telegram chat.
     # Without --announce the output stays in the isolated session and is never sent.
@@ -58,7 +43,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
         --tz "America/Los_Angeles" \
         --session isolated \
         --announce \
-        --model "anthropic/claude-sonnet-4-6" \
+        --model "anthropic/claude-haiku-4-5-20251001" \
         --thinking low \
         --timeout-seconds 480 \
         --channel telegram \

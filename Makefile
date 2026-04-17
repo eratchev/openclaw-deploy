@@ -88,25 +88,24 @@ open(p,'w').write(json.dumps(d,indent=2)); print('socket path fixed')"
 	docker compose restart openclaw
 	@echo "Exec approvals configured. Run 'make logs' to verify."
 
-# Configure heartbeat and morning cron (run once on existing deployment, or after reset)
+# Configure morning briefing cron (run once on existing deployment, or after reset)
 # Usage: make setup-heartbeat HOST=user@x.x.x.x HEARTBEAT_TO=<telegram-chat-id>
 setup-heartbeat:
 	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
 	ssh "$(HOST)" "cd ~/openclaw-deploy && \
-	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.every '30m' && \
-	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.target 'last' && \
-	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.directPolicy 'allow' && \
-	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.activeHours.start '09:00' && \
-	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.activeHours.end '22:00' && \
-	  sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.activeHours.timezone 'America/Los_Angeles' && \
-	  $(if $(HEARTBEAT_TO),sudo docker compose exec -T openclaw openclaw config set agents.defaults.heartbeat.to '\"$(HEARTBEAT_TO)\"' &&,) \
 	  sudo docker compose exec -T openclaw openclaw cron add \
 	    --name 'Morning briefing' \
 	    --cron '0 9 * * *' \
 	    --tz 'America/Los_Angeles' \
 	    --session isolated \
+	    --announce \
+	    --model 'anthropic/claude-haiku-4-5-20251001' \
+	    --thinking low \
+	    --timeout-seconds 480 \
+	    --channel telegram \
+	    $(if $(HEARTBEAT_TO),--to '$(HEARTBEAT_TO)',) \
 	    --message 'Read MEMORY_GUIDE.md for tool documentation. Then run the morning briefing: check today full calendar schedule for every gcal account listed in MEMORY_GUIDE.md, and check unread emails from overnight for every gmail account listed in MEMORY_GUIDE.md (use gmail list --limit 10 per account). Compose a concise summary — events today with times, any email action items from all accounts — and send it to Evgueni via Telegram.' || true && \
-	  echo 'Heartbeat and cron configured.'"
+	  echo 'Morning briefing cron configured.'"
 
 # Apply inbound firewall rules on VPS (run once after deploy, or to re-apply)
 setup-inbound:
