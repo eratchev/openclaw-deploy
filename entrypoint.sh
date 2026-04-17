@@ -33,8 +33,10 @@ if [ ! -f "$CONFIG_FILE" ]; then
     fi
 
     # ── Heartbeat ──────────────────────────────────────────────────────────────
-    # Runs every 30 min during active hours; agent reads HEARTBEAT.md for checklist
-    openclaw config set agents.defaults.heartbeat.every "30m"
+    # Runs every 60 min during active hours; Haiku model keeps costs low.
+    # agent reads HEARTBEAT.md for checklist
+    openclaw config set agents.defaults.heartbeat.every "60m"
+    openclaw config set agents.defaults.heartbeat.model "anthropic/claude-haiku-4-5-20251001"
     openclaw config set agents.defaults.heartbeat.target "last"
     openclaw config set agents.defaults.heartbeat.directPolicy "allow"
     openclaw config set agents.defaults.heartbeat.activeHours.start "09:00"
