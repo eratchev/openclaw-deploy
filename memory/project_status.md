@@ -18,14 +18,13 @@ Features shipped to origin/main as of 2026-03-21:
 
 **How to apply:** When user asks about project status or what features remain, check this file first.
 
-261 tests passing as of attendee management completion (pre-heartbeat). Guardrail tests added for memory grace period (now 37 tests).
+293 tests passing as of 2026-03-25 (multi-account Gmail + GCal deployed).
 
-## Heartbeat / cron deployment state (as of 2026-03-19)
+## Cost-reduction changes (2026-04-16)
 
-- Heartbeat running every 30 min, 9 AM–10 PM PT. Silent when nothing urgent (`ok-token`/`silent:true`). Sends Telegram alert only when urgent email or upcoming event found.
-- `heartbeat.to` set to user's Telegram chat ID in VPS config volume — needed so delivery routes to Telegram DM rather than the main agent session. Find it via `cat /home/node/.openclaw/agents/main/sessions/sessions.json | python3 -c "import json,sys; [print(k) for k in json.load(sys.stdin) if 'telegram:direct' in k]"` on the VPS.
-- Morning cron registered on VPS (job ID `d5154f27`), fires daily at 9 AM PT.
-- HEARTBEAT.md deployed to container workspace.
-- Guardrail has 120s memory grace period to avoid false kills on restart.
-- `HEARTBEAT_TO=<telegram-chat-id>` should be added to `.env` on VPS for future fresh deploys.
-- WhatsApp is logged out (401 loop) — harmless, not actively used.
+- **Heartbeat disabled** — was costing ~$4/month on Sonnet; duplicated by mail-proxy importance alerts + calendar-proxy reminders. Removed from entrypoint.sh, openclaw.json, Makefile.
+- **Morning briefing switched to Haiku** — `anthropic/claude-haiku-4-5-20251001` instead of Sonnet.
+- **Interactive chat fallback chain**: `openai/gpt-5.1-codex` → `anthropic/claude-haiku-4-5-20251001` → `anthropic/claude-sonnet-4-6` (Haiku added before Sonnet to avoid costly Sonnet fallback when Codex fails).
+- **Gmail poll interval** set to 900s in `.env.example` (was 180s).
+- **Anthropic API key rotated** (2026-04-16) after potential exposure in logs. New key stored in both `.env` on VPS and `auth-profiles.json` on data volume. See `reference_api_key_rotation.md`.
+- Estimated monthly cost after changes: ~$9/month (down from ~$50/month).
