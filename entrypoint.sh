@@ -44,7 +44,6 @@ if [ ! -f "$CONFIG_FILE" ]; then
         --session isolated \
         --announce \
         --model "anthropic/claude-haiku-4-5-20251001" \
-        --thinking low \
         --timeout-seconds 480 \
         --channel telegram \
         ${HEARTBEAT_TO:+--to "${HEARTBEAT_TO}"} \

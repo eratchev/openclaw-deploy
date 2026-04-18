@@ -100,7 +100,6 @@ setup-heartbeat:
 	    --session isolated \
 	    --announce \
 	    --model 'anthropic/claude-haiku-4-5-20251001' \
-	    --thinking low \
 	    --timeout-seconds 480 \
 	    --channel telegram \
 	    $(if $(HEARTBEAT_TO),--to '$(HEARTBEAT_TO)',) \
