@@ -47,7 +47,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
         --timeout-seconds 480 \
         --channel telegram \
         ${HEARTBEAT_TO:+--to "${HEARTBEAT_TO}"} \
-        --message "Read MEMORY_GUIDE.md for tool documentation. Then run the morning briefing: check today full calendar schedule for every gcal account listed in MEMORY_GUIDE.md, and check unread emails from overnight for every gmail account listed in MEMORY_GUIDE.md (use gmail list --limit 10 per account). Compose a concise summary — events today with times, any email action items from all accounts — and send it to Evgueni via Telegram." \
+        --message "Run the morning briefing: check today's full calendar schedule for gcal accounts personal, jobs, and work. Check unread emails from overnight for gmail accounts personal, jobs, and work (use gmail list --limit 5 per account). Compose a concise summary — events today with times, any email action items — and send it to Evgueni via Telegram." \
         || true
 
     echo "[entrypoint] Bootstrap complete. Starting gateway..."
