@@ -37,7 +37,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
 
     # Set primary model to gpt-4o-mini with Haiku fallback.
     # gpt-5.1-codex rejects reasoning_effort="none" and falls back to Anthropic on every call.
-    openclaw config set agents.main.defaults.model.primary "openai/gpt-4o-mini" || true
+    openclaw config set agents.defaults.model.primary "openai/gpt-4o-mini" || true
 
     # ── Morning cron ────────────────────────────────────────────────────────────
     # --announce + --to: deliver the agent's final summary to the Telegram chat.
