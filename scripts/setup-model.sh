@@ -19,8 +19,24 @@ p = '/home/node/.openclaw/openclaw.json'
 with open(p) as f:
     cfg = json.load(f)
 
-d = cfg['agents']['main']['defaults']
-d['model']['primary'] = 'openai/gpt-4o-mini'
+# Locate the defaults section — path varies by OpenClaw version
+d = None
+for keys in [['agents', 'main', 'defaults'], ['defaults'], ['agents', 'defaults']]:
+    obj = cfg
+    try:
+        for k in keys:
+            obj = obj[k]
+        if 'model' in obj:
+            d = obj
+            break
+    except (KeyError, TypeError):
+        continue
+
+if d is None:
+    cfg.setdefault('defaults', {})
+    d = cfg['defaults']
+
+d.setdefault('model', {})['primary'] = 'openai/gpt-4o-mini'
 d['model']['fallbacks'] = ['anthropic/claude-haiku-4-5-20251001']
 
 models = d.setdefault('models', {})
@@ -30,11 +46,9 @@ models.pop('openai/gpt-5.1-codex', None)
 with open(p, 'w') as f:
     json.dump(cfg, f, indent=4)
 
-primary = d['model']['primary']
-fallbacks = d['model']['fallbacks']
 print(f'openclaw.json updated')
-print(f'  primary:  {primary}')
-print(f'  fallback: {fallbacks}')
+print(f'  primary:  {d["model"]["primary"]}')
+print(f'  fallbacks: {d["model"]["fallbacks"]}')
 PYEOF
 
 ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose restart openclaw"
