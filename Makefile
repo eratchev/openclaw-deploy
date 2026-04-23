@@ -4,7 +4,7 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 # Load HOST from .deploy file written by 'make deploy'
 -include .deploy
 
-.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-heartbeat setup-egress setup-inbound setup-gcal setup-gmail setup-skills deploy-workspace deploy deploy-clis push doctor pair-whatsapp
+.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-heartbeat setup-model setup-egress setup-inbound setup-gcal setup-gmail setup-skills deploy-workspace deploy deploy-clis push doctor pair-whatsapp
 
 # Start all services (caddy, openclaw, redis, voice-proxy).
 up:
@@ -105,6 +105,12 @@ setup-heartbeat:
 	    $(if $(HEARTBEAT_TO),--to '$(HEARTBEAT_TO)',) \
 	    --message 'Run the morning briefing: check today'"'"'s full calendar schedule for gcal accounts personal, jobs, and work. Check unread emails from overnight for gmail accounts personal, jobs, and work (use gmail list --limit 5 per account). Compose a concise summary — events today with times, any email action items — and send it to Evgueni via Telegram.' || true && \
 	  echo 'Morning briefing cron configured.'"
+
+# Switch interactive chat primary model to gpt-4o-mini (run once on existing deployment)
+# Fixes gpt-5.1-codex always failing and falling back to Anthropic Haiku for all traffic.
+setup-model:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	@bash scripts/setup-model.sh "$(HOST)"
 
 # Apply inbound firewall rules on VPS (run once after deploy, or to re-apply)
 setup-inbound:
