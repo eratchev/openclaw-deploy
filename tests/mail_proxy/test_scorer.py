@@ -4,17 +4,19 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
-def _make_scorer(threshold=7, model="claude-haiku-4-5-20251001"):
+def _make_scorer(threshold=7, model="gpt-4o-mini"):
     import scorer
     s = scorer.ImportanceScorer(api_key="test-key", model=model, threshold=threshold)
     return s
 
 
 def _fake_response(results: list[dict]) -> MagicMock:
-    content = MagicMock()
-    content.text = json.dumps(results)
+    message = MagicMock()
+    message.content = json.dumps(results)
+    choice = MagicMock()
+    choice.message = message
     response = MagicMock()
-    response.content = [content]
+    response.choices = [choice]
     return response
 
 
@@ -100,12 +102,10 @@ def test_call_api_handles_markdown_code_fence():
     results = [{"message_id": "m1", "score": 8, "summary": "Important"}]
     fenced = f"```json\n{json.dumps(results)}\n```"
 
-    content = MagicMock()
-    content.text = fenced
-    response = MagicMock()
-    response.content = [content]
+    response = _fake_response([])
+    response.choices[0].message.content = fenced
 
-    s._client.messages.create = MagicMock(return_value=response)
+    s._client.chat.completions.create = MagicMock(return_value=response)
     parsed = s._call_api([{"message_id": "m1", "from_addr": "a@b.com",
                            "subject": "s", "snippet": "sn"}])
     assert parsed[0]["score"] == 8
@@ -120,16 +120,12 @@ def test_call_api_builds_correct_prompt():
 
     def fake_create(**kwargs):
         captured.update(kwargs)
-        content = MagicMock()
-        content.text = json.dumps([{"message_id": "m1", "score": 5, "summary": "ok"}])
-        resp = MagicMock()
-        resp.content = [content]
-        return resp
+        return _fake_response([{"message_id": "m1", "score": 5, "summary": "ok"}])
 
-    s._client.messages.create = fake_create
+    s._client.chat.completions.create = fake_create
     s._call_api(messages)
     # snippet should be truncated to 200 chars
-    user_content = captured["messages"][0]["content"]
+    user_content = captured["messages"][1]["content"]
     assert "A" * 201 not in user_content
     # system prompt should include "untrusted data"
-    assert "untrusted" in captured["system"]
+    assert "untrusted" in captured["messages"][0]["content"]
