@@ -357,8 +357,8 @@ def _start_poller() -> None:
                     "Run make setup-gmail to configure.")
         return
 
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    model = os.getenv("GMAIL_SCORER_MODEL", "claude-haiku-4-5-20251001")
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    model = os.getenv("GMAIL_SCORER_MODEL", "gpt-4o-mini")
     threshold = int(os.getenv("GMAIL_IMPORTANCE_THRESHOLD", "7"))
     interval = int(os.getenv("GMAIL_POLL_INTERVAL_SECONDS", "180"))
     poll_label = os.getenv("GMAIL_POLL_LABEL", "INBOX")

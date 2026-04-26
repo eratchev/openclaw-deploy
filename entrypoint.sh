@@ -32,8 +32,10 @@ if [ ! -f "$CONFIG_FILE" ]; then
         openclaw config set agents.main.provider anthropic || true
     fi
 
-    # Cap context window to prevent unbounded history accumulation (cost control)
-    openclaw config set agents.defaults.contextTokens "${OPENCLAW_CONTEXT_TOKENS:-40000}" || true
+    # Cap context window to prevent unbounded history accumulation (cost control).
+    # 12K is enough for system prompt + tool defs + recent turns; gpt-4o-mini at
+    # 40K was burning ~22M input tokens/day under normal use.
+    openclaw config set agents.defaults.contextTokens "${OPENCLAW_CONTEXT_TOKENS:-12000}" || true
 
     # Set primary model to gpt-4o-mini with Haiku fallback.
     # gpt-5.1-codex rejects reasoning_effort="none" and falls back to Anthropic on every call.

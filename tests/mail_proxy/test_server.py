@@ -176,3 +176,36 @@ def test_call_uses_default_account_when_no_param(monkeypatch):
     importlib.reload(s_mod)
     # Default account is first = "personal"
     assert s_mod.DEFAULT_ACCOUNT == "personal"
+
+
+def test_start_poller_uses_openai_key_and_model(monkeypatch):
+    """Scorer must be initialized with OPENAI_API_KEY and an OpenAI model.
+
+    Regression: server previously read ANTHROPIC_API_KEY and defaulted to a
+    Claude model after the scorer was switched to the OpenAI client. That
+    caused 401s and silent circuit-breaker tripping.
+    """
+    monkeypatch.delenv("GMAIL_DISABLE_POLLER", raising=False)
+    monkeypatch.setenv("GMAIL_ACCOUNTS", "personal")
+    monkeypatch.setenv("GMAIL_TOKEN_ENCRYPTION_KEY_PERSONAL",
+                       Fernet.generate_key().decode())
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-test")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-must-not-be-used")
+    monkeypatch.delenv("GMAIL_SCORER_MODEL", raising=False)
+
+    captured = {}
+
+    class _FakeScorer:
+        def __init__(self, *, api_key, model, threshold):
+            captured["api_key"] = api_key
+            captured["model"] = model
+            captured["threshold"] = threshold
+
+    with patch("scorer.ImportanceScorer", _FakeScorer), \
+         patch("threading.Thread") as fake_thread:
+        fake_thread.return_value = MagicMock()
+        import importlib, server as s_mod
+        importlib.reload(s_mod)
+
+    assert captured["api_key"] == "sk-openai-test"
+    assert captured["model"].startswith("gpt-")

@@ -39,6 +39,9 @@ if d is None:
 d.setdefault('model', {})['primary'] = 'openai/gpt-4o-mini'
 d['model']['fallbacks'] = ['anthropic/claude-haiku-4-5-20251001']
 
+# Cap context window — 40K was burning ~22M input tokens/day on gpt-4o-mini.
+d['contextTokens'] = 12000
+
 models = d.setdefault('models', {})
 models['openai/gpt-4o-mini'] = {'alias': 'GPT'}
 models.pop('openai/gpt-5.1-codex', None)
@@ -47,8 +50,9 @@ with open(p, 'w') as f:
     json.dump(cfg, f, indent=4)
 
 print(f'openclaw.json updated')
-print(f'  primary:  {d["model"]["primary"]}')
-print(f'  fallbacks: {d["model"]["fallbacks"]}')
+print(f'  primary:       {d["model"]["primary"]}')
+print(f'  fallbacks:     {d["model"]["fallbacks"]}')
+print(f'  contextTokens: {d["contextTokens"]}')
 PYEOF
 
 ssh "$HOST" "cd ~/openclaw-deploy && sudo docker compose restart openclaw"
