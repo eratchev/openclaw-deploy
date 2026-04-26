@@ -40,7 +40,8 @@ d.setdefault('model', {})['primary'] = 'openai/gpt-4o-mini'
 d['model']['fallbacks'] = ['anthropic/claude-haiku-4-5-20251001']
 
 # Cap context window — 40K was burning ~22M input tokens/day on gpt-4o-mini.
-d['contextTokens'] = 12000
+# 16000 is the platform-enforced floor; lower values fail with FailoverError.
+d['contextTokens'] = 16000
 
 models = d.setdefault('models', {})
 models['openai/gpt-4o-mini'] = {'alias': 'GPT'}
