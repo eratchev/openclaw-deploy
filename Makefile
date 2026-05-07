@@ -4,7 +4,7 @@ DATA_VOLUME := $(PROJECT)_openclaw_data
 # Load HOST from .deploy file written by 'make deploy'
 -include .deploy
 
-.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch setup-approvals setup-heartbeat setup-model setup-egress setup-inbound setup-gcal setup-gmail setup-skills deploy-workspace deploy deploy-clis push doctor pair-whatsapp
+.PHONY: up up-calendar up-voice up-mail down logs logs-all restart status backup backup-remote update test kill-switch halt setup-approvals setup-heartbeat setup-model setup-egress setup-inbound setup-gcal setup-gmail setup-skills deploy-workspace deploy deploy-clis push doctor pair-whatsapp
 
 # Start all services (caddy, openclaw, redis, voice-proxy).
 up:
@@ -148,6 +148,18 @@ kill-switch:
 	@echo "To resume: remove the file from the volume, then restart:"
 	@echo "  docker run --rm -v $(DATA_VOLUME):/data busybox rm -f /data/GUARDRAIL_DISABLE"
 	@echo "  make restart"
+
+# Power off the VPS host. The machine will stay off until you start it
+# again from the Hetzner console — there is no remote way to power it back on.
+# Usage: make halt  (requires HOST from .deploy or HOST=user@x.x.x.x)
+halt:
+	@[ -n "$(HOST)" ] || (echo "Run 'make deploy HOST=user@x.x.x.x' first, or set HOST=" && exit 1)
+	@echo "About to power off $(HOST)."
+	@echo "The VPS will stay OFF until you start it from the Hetzner console."
+	@printf "Type 'halt' to confirm: "
+	@read confirm && [ "$$confirm" = "halt" ] || (echo "Aborted." && exit 1)
+	@ssh "$(HOST)" "sudo poweroff" || true
+	@echo "Poweroff issued. SSH connection will drop as the host shuts down."
 
 # Push updated CLI binaries (gmail, contacts, gcal) into the openclaw container.
 # No OAuth re-run needed. Skips binaries that haven't been set up yet.
